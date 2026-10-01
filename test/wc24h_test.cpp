@@ -3,6 +3,7 @@
 //   ./a.out
 
 #include "WC24h/NightTimer.h"
+#include "WC24h/Overlay.h"
 #include "WC24h/Wc24hDisplay.h"
 
 #include <cstdio>
@@ -114,10 +115,122 @@ void testNightTimers() {
                 "switch on when off");
 }
 
+void expectDate(int32_t actual, int32_t year, uint8_t month, uint8_t day,
+                const char *what) {
+    const int32_t expected = wc24h::daysFromCivil(year, month, day);
+    if (actual != expected) {
+        printf("FAIL %s: expected %04d-%02u-%02u, %d days off\n", what, year,
+               month, day, actual - expected);
+        failures++;
+    }
+}
+
+int32_t rangeStart(uint8_t dateCode, int32_t year) {
+    wc24h::Overlay overlay = {};
+    overlay.dateCode = dateCode;
+    int32_t start = 0;
+    wc24h::overlayRangeStart(overlay, year, start);
+    return start;
+}
+
+void testCalendar() {
+    using namespace wc24h;
+    expectDate(daysFromCivil(1970, 1, 1), 1970, 1, 1, "epoch");
+    if (daysFromCivil(1970, 1, 1) != 0 || weekdayFromDays(0) != 4) {
+        printf("FAIL epoch is not a Thursday at day 0\n");
+        failures++;
+    }
+    if (weekdayFromDays(daysFromCivil(2026, 10, 1)) != 4) {
+        printf("FAIL 2026-10-01 is a Thursday\n");
+        failures++;
+    }
+
+    expectDate(easterSunday(2000), 2000, 4, 23, "Easter 2000");
+    expectDate(easterSunday(2019), 2019, 4, 21, "Easter 2019");
+    expectDate(easterSunday(2024), 2024, 3, 31, "Easter 2024");
+    expectDate(easterSunday(2025), 2025, 4, 20, "Easter 2025");
+    expectDate(easterSunday(2026), 2026, 4, 5, "Easter 2026");
+
+    // Leap year: the original add_days() is a day off here.
+    expectDate(rangeStart(DATE_CARNIVAL_MONDAY, 2024), 2024, 2, 12,
+               "Carnival Monday 2024");
+    expectDate(rangeStart(DATE_CARNIVAL_MONDAY, 2025), 2025, 3, 3,
+               "Carnival Monday 2025");
+    expectDate(rangeStart(DATE_CARNIVAL_MONDAY, 2026), 2026, 2, 16,
+               "Carnival Monday 2026");
+
+    expectDate(rangeStart(DATE_ADVENT1, 2023), 2023, 12, 3, "Advent 1 2023");
+    expectDate(rangeStart(DATE_ADVENT4, 2023), 2023, 12, 24, "Advent 4 2023");
+    expectDate(rangeStart(DATE_ADVENT1, 2024), 2024, 12, 1, "Advent 1 2024");
+    expectDate(rangeStart(DATE_ADVENT1, 2025), 2025, 11, 30, "Advent 1 2025");
+    expectDate(rangeStart(DATE_ADVENT2, 2026), 2026, 12, 6, "Advent 2 2026");
+    expectDate(rangeStart(DATE_ADVENT1, 2026), 2026, 11, 29, "Advent 1 2026");
+}
+
+void expectSelected(int8_t actual, int8_t expected, const char *what) {
+    if (actual != expected) {
+        printf("FAIL overlay selection %s: expected %d, got %d\n", what,
+               expected, actual);
+        failures++;
+    }
+}
+
+void testOverlaySelection() {
+    using namespace wc24h;
+    Overlay overlays[4] = {};
+
+    // 0: date ticker every 15 minutes, always
+    overlays[0].type = OVERLAY_DATE;
+    overlays[0].flags = OVERLAY_FLAG_ACTIVE;
+    overlays[0].interval = 15;
+    // 1: Christmas tree every 15 minutes from Advent 1 until 3 January
+    overlays[1].type = OVERLAY_ICON;
+    overlays[1].flags = OVERLAY_FLAG_ACTIVE;
+    overlays[1].interval = 15;
+    overlays[1].dateCode = DATE_ADVENT1;
+    overlays[1].days = 36;
+    // 2: temperature every 5 minutes, always
+    overlays[2].type = OVERLAY_TEMPERATURE;
+    overlays[2].flags = OVERLAY_FLAG_ACTIVE;
+    overlays[2].interval = 5;
+    // 3: inactive New Year's fireworks every minute on 31.12. for 2 days
+    overlays[3].type = OVERLAY_ICON;
+    overlays[3].interval = 1;
+    overlays[3].dateCode = DATE_FIXED;
+    overlays[3].month = 12;
+    overlays[3].day = 31;
+    overlays[3].days = 2;
+
+    expectSelected(selectOverlay(overlays, 4, 2026, 7, 1, 7), -1,
+                   "nothing due at :07");
+    expectSelected(selectOverlay(overlays, 4, 2026, 7, 1, 5), 2,
+                   "temperature at :05");
+    expectSelected(selectOverlay(overlays, 4, 2026, 7, 1, 30), 0,
+                   "longest interval wins at :30");
+    expectSelected(selectOverlay(overlays, 4, 2026, 12, 6, 30), 1,
+                   "dated overlay wins a tie in Advent");
+    expectSelected(selectOverlay(overlays, 4, 2027, 1, 1, 30), 1,
+                   "Advent range reaches into January");
+    expectSelected(selectOverlay(overlays, 4, 2027, 1, 3, 30), 1,
+                   "Advent range covers its last day");
+    expectSelected(selectOverlay(overlays, 4, 2027, 1, 4, 30), 0,
+                   "Advent range ends after 36 days");
+
+    overlays[3].flags = OVERLAY_FLAG_ACTIVE;
+    expectSelected(selectOverlay(overlays, 4, 2026, 12, 31, 7), 3,
+                   "fixed date on 31.12.");
+    expectSelected(selectOverlay(overlays, 4, 2027, 1, 1, 7), 3,
+                   "fixed date range across New Year");
+    expectSelected(selectOverlay(overlays, 4, 2027, 1, 2, 7), -1,
+                   "fixed date range over");
+}
+
 } // namespace
 
 int main() {
     testNightTimers();
+    testCalendar();
+    testOverlaySelection();
 
     // Words are listed in table order, not in reading order.
     expectTime(4, 13, 37,

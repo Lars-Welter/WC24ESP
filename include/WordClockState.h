@@ -1,5 +1,6 @@
 #pragma once
 #include "Arduino.h"
+#include "WC24h/Overlay.h"
 #include "version.gen.h"
 #include <NeoPixelBus.h> // HsbColor
 
@@ -117,6 +118,11 @@ struct NightTimer {
     uint8_t flags;
     uint8_t hour;
     uint8_t minute;
+};
+
+enum ColorAnimation : uint8_t {
+    COLOR_ANIMATION_NONE = 0,
+    COLOR_ANIMATION_DAYLIGHT = 1,
 };
 
 // Value of GLOBAL::wc24hDisplayMode that keeps the phrasing of the
@@ -270,6 +276,8 @@ struct GLOBAL {
 
     uint8_t wc24hDisplayMode;
     NightTimer nightTimers[MAX_NIGHT_TIMERS];
+    wc24h::Overlay overlays[wc24h::MAX_OVERLAYS];
+    uint8_t colorAnimation;
 };
 extern GLOBAL G;
 
@@ -292,6 +300,7 @@ extern uint8_t lastMinuteArray;
 extern uint16_t minutePixelArray[4];
 extern bool frameArray[200];
 extern bool parametersChanged;
+extern bool overlayActive;
 extern bool layoutChanged;
 extern bool colorChangedByWebsite;
 extern uint8_t statusAccessPoint;
@@ -383,6 +392,8 @@ enum CommandWords : uint8_t {
     COMMAND_SET_TIMEZONE = 108,
     COMMAND_SET_WC24H_DISPLAY_MODE = 109,
     COMMAND_SET_NIGHT_TIMERS = 110,
+    COMMAND_SET_OVERLAYS = 111,
+    COMMAND_SET_COLOR_ANIMATION = 112,
 
     COMMAND_SPEED = 152,
 

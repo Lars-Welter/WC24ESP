@@ -1557,6 +1557,10 @@ void Transition::init() { saveMatrix(); }
 void Transition::loop(struct tm &tm) {
     static bool specialEvent;
 
+    if (overlayActive) {
+        return; // an overlay owns the display meanwhile
+    }
+
     if (maxRows != usedClockType->rowsWordMatrix() ||
         maxCols != usedClockType->colsWordMatrix()) {
 

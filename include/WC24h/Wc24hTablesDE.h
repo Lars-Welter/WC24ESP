@@ -14,6 +14,8 @@
 
 #pragma once
 
+// clang-format off
+
 #include <stdint.h>
 
 namespace wc24h {
@@ -1662,5 +1664,7 @@ static_assert(sizeof(tbl_modes) / sizeof(tbl_modes[0]) == DISPLAY_MODES_COUNT,
               "display mode table size");
 static_assert(sizeof(illumination) / sizeof(illumination[0]) == WP_COUNT,
               "illumination table size");
+
+// clang-format on
 
 } // namespace wc24h

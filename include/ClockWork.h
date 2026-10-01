@@ -1,6 +1,7 @@
 #pragma once
 
 #include "HardwareButtonController.h"
+#include "WC24h/Overlay.h"
 #include <NeoPixelBus.h>
 
 class ClockWork {
@@ -43,7 +44,7 @@ private:
     bool getStaticScrollingTextInfo(const char *buf, StaticScrollingText &info);
     void displayStaticScrollingText(const char *buf,
                                     const StaticScrollingText &info);
-    void scrollingText(const char *buf);
+    bool scrollingText(const char *buf, bool restart = false);
     void displaySymbols(BitmapSymbol bitmapSymbolnum);
     void countdownToMidnight();
 
@@ -86,8 +87,17 @@ private:
     //------------------------------------------------------------------------------
     bool setClockWc24h();
     void showWc24hWords(const bool *words, bool showItIs);
+    bool readTemperature(float &celsius);
     bool readTemperatureIndex(uint8_t &temperatureIndex);
+    bool isCurrentWeatherNeeded();
     void loopNightTimers(const struct tm &tm);
+    void loopColorAnimation();
+    void startOverlay(const struct tm &tm);
+    bool beginOverlay(const wc24h::Overlay &overlay, const struct tm &tm);
+    void loopOverlay();
+    void stopOverlay();
+    void showOverlayIcon(uint32_t elapsed);
+    void showOverlayWords(const bool *words);
 
 public:
     // ClockWork() = default;

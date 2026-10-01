@@ -4,8 +4,11 @@
 #include "OpenWeatherMap.h"
 #include "SensitiveData.h"
 #include "TransitionTypes/Transition.h"
+#include "WC24h/CurrentWeather.h"
 #include "WC24h/NightTimer.h"
+#include "WC24h/Overlay.h"
 #include "WC24h/Wc24hDisplay.h"
+#include "WC24h/Wc24hIcons.h"
 #include "WordClockState.h"
 #include "WordClockTypes/ClockType.hpp"
 #include "math.h"
@@ -16,6 +19,7 @@
 
 BH1750 lightMeter;
 OpenWMap weather;
+CurrentWeather currentWeather;
 
 uint8_t activeLedPin = UINT8_MAX;
 uint8_t activeLedColorType = UINT8_MAX;
@@ -560,15 +564,20 @@ void ClockWork::displayStaticScrollingText(const char *buf,
 
 //------------------------------------------------------------------------------
 
-void ClockWork::scrollingText(const char *buf) {
+bool ClockWork::scrollingText(const char *buf, bool restart) {
     static uint8_t i = 0, ii = 0;
     StaticScrollingText staticText;
+
+    if (restart) {
+        i = 0;
+        ii = 0;
+    }
 
     if (getStaticScrollingTextInfo(buf, staticText)) {
         i = 0;
         ii = 0;
         displayStaticScrollingText(buf, staticText);
-        return;
+        return false;
     }
 
     uint8_t offsetRow = (usedClockType->rowsWordMatrix() -
@@ -614,8 +623,10 @@ void ClockWork::scrollingText(const char *buf) {
         ii++;
         if (ii >= len + charsToFlush) {
             ii = 0;
+            return true;
         }
     }
+    return false;
 }
 
 //------------------------------------------------------------------------------
@@ -1450,16 +1461,42 @@ template <typename Rtc> bool readRtcTemperature(Rtc &, float &) {
 
 //------------------------------------------------------------------------------
 
+// The DS3231 of an attached RTC module measures the room temperature, else
+// the outdoor temperature of OpenWeatherMap is used.
+bool ClockWork::readTemperature(float &celsius) {
+    if (externalRTC && readRtcTemperature(RTC, celsius)) {
+        return true;
+    }
+    return currentWeather.getTemperature(celsius);
+}
+
+//------------------------------------------------------------------------------
+
 bool ClockWork::readTemperatureIndex(uint8_t &temperatureIndex) {
     float celsius;
-    if (!externalRTC || !readRtcTemperature(RTC, celsius)) {
-        return false;
-    }
-    if (celsius < 0.f || celsius > 127.f) {
+    if (!readTemperature(celsius) || celsius < 0.f || celsius > 127.f) {
         return false;
     }
     temperatureIndex = static_cast<uint8_t>(lroundf(celsius * 2.f));
     return true;
+}
+
+//------------------------------------------------------------------------------
+
+bool ClockWork::isCurrentWeatherNeeded() {
+    if (usedClockType->hasWc24hTables() &&
+        G.wc24hDisplayMode == wc24h::TEMPERATURE_MODE) {
+        return true;
+    }
+    for (const wc24h::Overlay &overlay : G.overlays) {
+        if ((overlay.flags & wc24h::OVERLAY_FLAG_ACTIVE) &&
+            (overlay.type == wc24h::OVERLAY_TEMPERATURE ||
+             overlay.type == wc24h::OVERLAY_TEMPERATURE_DIGITS ||
+             overlay.type == wc24h::OVERLAY_WEATHER_ICON)) {
+            return true;
+        }
+    }
+    return false;
 }
 
 //------------------------------------------------------------------------------
@@ -1521,6 +1558,298 @@ void ClockWork::loopNightTimers(const struct tm &tm) {
             requestHardwareButtonDisplayRefresh();
             return;
         }
+    }
+}
+
+//------------------------------------------------------------------------------
+// Color animation "daylight" of the WordClock24h firmware: the foreground
+// color follows the time of day, blue at night, red in the morning and
+// evening, yellow at noon.
+
+void ClockWork::loopColorAnimation() {
+    // 0..63 per hour, as in display.c of the original firmware
+    static const uint8_t red[24] = {0,  0,  0,  15, 31, 47, 63, 63,
+                                    63, 63, 63, 63, 63, 63, 63, 63,
+                                    63, 63, 63, 47, 31, 15, 0,  0};
+    static const uint8_t green[24] = {0,  0,  0,  0,  0, 0, 0, 0, 0, 15, 31, 47,
+                                      63, 47, 31, 15, 0, 0, 0, 0, 0, 0,  0,  0};
+    static const uint8_t blue[24] = {63, 47, 31, 15, 0,  0,  0,  0,
+                                     0,  0,  0,  0,  0,  0,  0,  15,
+                                     31, 47, 63, 63, 63, 63, 63, 63};
+
+    if (G.colorAnimation != COLOR_ANIMATION_DAYLIGHT) {
+        return;
+    }
+
+    // Blend into the next hour's color in the course of the hour.
+    const uint8_t next = (_hour + 1) % 24;
+    const float progress = (_minute * 60 + _second) / 3600.f;
+    const RgbColor from(red[_hour] * 4, green[_hour] * 4, blue[_hour] * 4);
+    const RgbColor to(red[next] * 4, green[next] * 4, blue[next] * 4);
+    const HsbColor blended(RgbColor::LinearBlend(from, to, progress));
+
+    HsbColor &foreground = G.color[Foreground];
+    if (fabsf(foreground.H - blended.H) > 0.002f ||
+        fabsf(foreground.S - blended.S) > 0.002f) {
+        foreground.H = blended.H;
+        foreground.S = blended.S;
+        parametersChanged = true;
+    }
+}
+
+//------------------------------------------------------------------------------
+// Overlays of the WordClock24h firmware
+
+namespace {
+struct OverlayState {
+    const wc24h::Overlay *overlay = nullptr;
+    const wc24h::Icon *icon = nullptr;
+    uint32_t startMillis = 0;
+    uint32_t lastFrameMillis = 0;
+    uint32_t durationMs = 0;
+    bool ticker = false;
+    char text[32] = "";
+} overlayState;
+
+constexpr uint32_t OVERLAY_ICON_FADE_MS = 2000;
+constexpr uint32_t OVERLAY_FRAME_MS = 30;
+constexpr uint32_t OVERLAY_MAX_MS = 120000;
+
+const wc24h::Icon *findWeatherIcon(const char *code) {
+    for (const wc24h::Icon &icon : wc24h::WEATHER_ICONS) {
+        if (strcmp(icon.name, code) == 0) {
+            return &icon;
+        }
+    }
+    return nullptr;
+}
+} // namespace
+
+//------------------------------------------------------------------------------
+
+void ClockWork::startOverlay(const struct tm &tm) {
+    if (overlayActive || !led.getState() ||
+        (G.prog != COMMAND_IDLE && G.prog != COMMAND_MODE_WORD_CLOCK)) {
+        return;
+    }
+
+    const int8_t index =
+        wc24h::selectOverlay(G.overlays, wc24h::MAX_OVERLAYS, tm.tm_year + 1900,
+                             tm.tm_mon + 1, tm.tm_mday, tm.tm_min);
+    if (index < 0 || !beginOverlay(G.overlays[index], tm)) {
+        return;
+    }
+
+    overlayActive = true;
+    overlayState.startMillis = millis();
+    overlayState.lastFrameMillis = 0;
+    led.clear();
+    led.show();
+}
+
+//------------------------------------------------------------------------------
+// Prepares the overlay, returns false when there is nothing to show.
+
+bool ClockWork::beginOverlay(const wc24h::Overlay &overlay,
+                             const struct tm &tm) {
+    overlayState.overlay = &overlay;
+    overlayState.icon = nullptr;
+    overlayState.ticker = false;
+    overlayState.text[0] = '\0';
+    // At least 5 seconds as in the original, to fade in and out.
+    overlayState.durationMs =
+        (overlay.duration < 5 ? 5UL : overlay.duration) * 1000UL;
+
+    switch (overlay.type) {
+    case wc24h::OVERLAY_ICON:
+        overlayState.icon = &wc24h::ICONS[overlay.icon];
+        return true;
+
+    case wc24h::OVERLAY_WEATHER_ICON:
+        overlayState.icon = findWeatherIcon(currentWeather.getIconCode());
+        return overlayState.icon != nullptr;
+
+    case wc24h::OVERLAY_DATE:
+        snprintf(overlayState.text, sizeof(overlayState.text), "%02d.%02d.%04d",
+                 tm.tm_mday, tm.tm_mon + 1, tm.tm_year + 1900);
+        overlayState.ticker = true;
+        return true;
+
+    case wc24h::OVERLAY_TICKER:
+        strlcpy(overlayState.text, overlay.text, sizeof(overlayState.text));
+        overlayState.ticker = overlayState.text[0] != '\0';
+        return overlayState.ticker;
+
+    case wc24h::OVERLAY_TEMPERATURE:
+    case wc24h::OVERLAY_TEMPERATURE_DIGITS: {
+        float celsius;
+        if (!readTemperature(celsius)) {
+            return false;
+        }
+        uint8_t index;
+        wc24h::WordSet words;
+        if (overlay.type == wc24h::OVERLAY_TEMPERATURE &&
+            readTemperatureIndex(index) &&
+            wc24h::fillTemperatureWords(index, words)) {
+            return true;
+        }
+        if (overlay.type == wc24h::OVERLAY_TEMPERATURE) {
+            // Outside of what the words can say: scroll it instead.
+            snprintf(overlayState.text, sizeof(overlayState.text), "%d GRAD",
+                     static_cast<int>(lroundf(celsius)));
+            overlayState.ticker = true;
+        }
+        return true;
+    }
+
+    default:
+        return false;
+    }
+}
+
+//------------------------------------------------------------------------------
+
+void ClockWork::stopOverlay() {
+    overlayActive = false;
+    overlayState.overlay = nullptr;
+    led.clear();
+    G.prog = COMMAND_MODE_WORD_CLOCK;
+    parametersChanged = true;
+}
+
+//------------------------------------------------------------------------------
+
+void ClockWork::showOverlayWords(const bool *words) {
+    led.resetFrontMatrixBuffer();
+    showWc24hWords(words, true);
+    led.setbyFrontMatrix(Foreground);
+    led.setbyFrontMatrix(Background, false);
+    led.show();
+}
+
+//------------------------------------------------------------------------------
+
+void ClockWork::showOverlayIcon(uint32_t elapsed) {
+    const wc24h::Icon &icon = *overlayState.icon;
+    const uint8_t rows = usedClockType->rowsWordMatrix();
+    const uint8_t cols = usedClockType->colsWordMatrix();
+    const uint8_t rowOffset = icon.rows < rows ? (rows - icon.rows) / 2 : 0;
+    const uint8_t colOffset = icon.cols < cols ? (cols - icon.cols) / 2 : 0;
+    const uint32_t step = elapsed / 62; // animation steps of 1/16 s
+
+    float fade = 1.f;
+    if (elapsed < OVERLAY_ICON_FADE_MS) {
+        fade = static_cast<float>(elapsed) / OVERLAY_ICON_FADE_MS;
+    } else if (overlayState.durationMs - elapsed < OVERLAY_ICON_FADE_MS) {
+        fade = static_cast<float>(overlayState.durationMs - elapsed) /
+               OVERLAY_ICON_FADE_MS;
+    }
+    const float brightness =
+        led.getColorbyPositionWithAppliedBrightness(Foreground).B * fade;
+
+    for (uint8_t row = 0; row < icon.rows && row + rowOffset < rows; row++) {
+        for (uint8_t col = 0; col < icon.cols && col + colOffset < cols;
+             col++) {
+            const uint16_t idx = row * icon.cols + col;
+            uint32_t onStep = 0;
+            uint32_t offStep = UINT32_MAX;
+            if (icon.animationOn && icon.animationOn[idx] >= 'A') {
+                onStep = icon.animationOn[idx] - 'A';
+            }
+            if (icon.animationOff && icon.animationOff[idx] >= 'A') {
+                offStep = icon.animationOff[idx] - 'A';
+            }
+
+            uint8_t displayRow = row + rowOffset;
+            uint8_t displayCol = col + colOffset;
+            if (G.layoutVariant[MirrorVertical]) {
+                displayCol = cols - 1 - displayCol;
+            }
+            if (G.layoutVariant[MirrorHorizontal]) {
+                displayRow = rows - 1 - displayRow;
+            }
+
+            const uint8_t colorIdx = icon.colors[idx] - '0';
+            if (colorIdx == 0 || colorIdx > 9 || step < onStep ||
+                step >= offStep) {
+                led.setPixel(displayRow, displayCol, HsbColor(0.f, 0.f, 0.f));
+                continue;
+            }
+            const wc24h::IconColor &rgb = wc24h::ICON_PALETTE[colorIdx];
+            HsbColor color(RgbColor(rgb.red, rgb.green, rgb.blue));
+            color.B *= brightness;
+            led.setPixel(displayRow, displayCol, color);
+        }
+    }
+    led.show();
+}
+
+//------------------------------------------------------------------------------
+
+void ClockWork::loopOverlay() {
+    if (!led.getState() ||
+        (G.prog != COMMAND_IDLE && G.prog != COMMAND_MODE_WORD_CLOCK)) {
+        // switched off or another mode was chosen meanwhile
+        overlayActive = false;
+        overlayState.overlay = nullptr;
+        return;
+    }
+
+    const uint32_t now = millis();
+    const uint32_t elapsed = now - overlayState.startMillis;
+
+    if (overlayState.ticker) {
+        const uint32_t frameMs = (11u - G.effectSpeed) * 30u;
+        if (overlayState.lastFrameMillis != 0 &&
+            now - overlayState.lastFrameMillis < frameMs) {
+            return;
+        }
+        const bool restart = overlayState.lastFrameMillis == 0;
+        overlayState.lastFrameMillis = now;
+        // A text that fits on the display does not scroll and stays for the
+        // overlay's duration instead.
+        StaticScrollingText staticText;
+        const bool isStatic =
+            getStaticScrollingTextInfo(overlayState.text, staticText);
+        if (scrollingText(overlayState.text, restart) ||
+            elapsed >= OVERLAY_MAX_MS ||
+            (isStatic && elapsed >= overlayState.durationMs)) {
+            stopOverlay();
+        }
+        return;
+    }
+
+    if (elapsed >= overlayState.durationMs) {
+        stopOverlay();
+        return;
+    }
+    if (now - overlayState.lastFrameMillis < OVERLAY_FRAME_MS) {
+        return;
+    }
+    overlayState.lastFrameMillis = now;
+
+    if (overlayState.icon) {
+        showOverlayIcon(elapsed);
+        return;
+    }
+
+    float celsius;
+    uint8_t index;
+    wc24h::WordSet words;
+    if (overlayState.overlay->type == wc24h::OVERLAY_TEMPERATURE &&
+        readTemperatureIndex(index) &&
+        wc24h::fillTemperatureWords(index, words)) {
+        showOverlayWords(words);
+    } else if (overlayState.overlay->type ==
+                   wc24h::OVERLAY_TEMPERATURE_DIGITS &&
+               readTemperature(celsius)) {
+        const int value = static_cast<int>(lroundf(celsius));
+        char digits[4];
+        snprintf(digits, sizeof(digits), "%2d",
+                 value < -9 ? -9 : (value > 99 ? 99 : value));
+        led.showNumbers(digits[0], digits[1]);
+    } else {
+        stopOverlay();
     }
 }
 
@@ -1588,6 +1917,9 @@ void ClockWork::loop(struct tm &tm) {
             loopAutoBrightLogic();
         }
 
+        currentWeather.loop(isCurrentWeatherNeeded());
+        loopColorAnimation();
+
         if (G.prog == COMMAND_IDLE && G.conf == COMMAND_IDLE) {
             led.clear();
             G.prog = COMMAND_MODE_WORD_CLOCK;
@@ -1608,6 +1940,7 @@ void ClockWork::loop(struct tm &tm) {
     if (lastMinute != _minute) {
         lastMinute = _minute;
         loopNightTimers(tm);
+        startOverlay(tm);
         if (colorChangedByWebsite) {
             eeprom::write();
             colorChangedByWebsite = false;
@@ -1750,7 +2083,7 @@ void ClockWork::loop(struct tm &tm) {
     }
 
     case COMMAND_REQUEST_WC24H: {
-        DynamicJsonDocument config(2048);
+        DynamicJsonDocument config(4096);
         config["command"] = "wc24h";
         config["hasWc24hTables"] = usedClockType->hasWc24hTables();
         config["displayMode"] = G.wc24hDisplayMode;
@@ -1764,6 +2097,29 @@ void ClockWork::loop(struct tm &tm) {
             entry.add(timer.flags);
             entry.add(timer.hour);
             entry.add(timer.minute);
+        }
+        JsonArray overlays = config.createNestedArray("overlays");
+        for (const wc24h::Overlay &overlay : G.overlays) {
+            JsonArray entry = overlays.createNestedArray();
+            entry.add(overlay.type);
+            entry.add(overlay.flags);
+            entry.add(overlay.interval);
+            entry.add(overlay.duration);
+            entry.add(overlay.dateCode);
+            entry.add(overlay.month);
+            entry.add(overlay.day);
+            entry.add(overlay.days);
+            entry.add(overlay.icon);
+            entry.add(overlay.text);
+        }
+        JsonArray icons = config.createNestedArray("icons");
+        for (const wc24h::Icon &icon : wc24h::ICONS) {
+            icons.add(icon.name);
+        }
+        config["colorAnimation"] = G.colorAnimation;
+        float celsius;
+        if (readTemperature(celsius)) {
+            config["temperature"] = celsius;
         }
 
         sendJsonToClient(G.client_nr, config);
@@ -1859,7 +2215,9 @@ void ClockWork::loop(struct tm &tm) {
     }
 
     case COMMAND_SET_WC24H_DISPLAY_MODE:
-    case COMMAND_SET_NIGHT_TIMERS: {
+    case COMMAND_SET_NIGHT_TIMERS:
+    case COMMAND_SET_OVERLAYS:
+    case COMMAND_SET_COLOR_ANIMATION: {
         eeprom::write();
         parametersChanged = true;
         break;
@@ -2013,6 +2371,11 @@ void ClockWork::loop(struct tm &tm) {
     }
 
     G.conf = COMMAND_IDLE;
+
+    if (overlayActive) {
+        loopOverlay();
+        return;
+    }
 
     switch (G.prog) {
 

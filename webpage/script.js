@@ -108,6 +108,8 @@ const CMD = {
 	SET_TIMEZONE: 108,
 	SET_WC24H_DISPLAY_MODE: 109,
 	SET_NIGHT_TIMERS: 110,
+	SET_OVERLAYS: 111,
+	SET_COLOR_ANIMATION: 112,
 	SPEED: 152,
 
 	// Requests
@@ -124,6 +126,16 @@ const CMD = {
 
 const NIGHT_TIMER_FLAG_ACTIVE = 0x80;
 const NIGHT_TIMER_FLAG_SWITCH_ON = 0x40;
+const OVERLAY_FLAG_ACTIVE = 0x01;
+const OVERLAY_TEXT_LENGTH = 23;
+// value: i18n key, in the order shown in the type selection
+const OVERLAY_TYPES = [[0, "none"], [1, "icon"], [4, "weather-icon"], [2, "date"],
+	[3, "temperature-words"], [10, "temperature-digits"], [6, "ticker"]];
+const OVERLAY_TYPE_ICON = 1;
+const OVERLAY_TYPE_TICKER = 6;
+const OVERLAY_DATE_FIXED = 1;
+const OVERLAY_DATE_CODES = ["always", "fixed", "carnival-monday", "easter-sunday",
+	"advent1", "advent2", "advent3", "advent4"];
 
 /**
  * Maps the mode to the corresponding input id on the functions page.
@@ -727,6 +739,158 @@ function renderWc24h(data) {
 	data.nightTimers.forEach((timer, idx) => {
 		container.appendChild(createNightTimerRow(idx, timer[0], timer[1], timer[2]));
 	});
+
+	document.getElementById("wc24h-color-animation").value = data.colorAnimation;
+	document.getElementById("wc24h-temperature").value = data.temperature === undefined
+		? i18next.t("view.wc24h.temperature-none")
+		: `${data.temperature.toFixed(1)} °C`;
+
+	const overlays = document.getElementById("wc24h-overlays");
+	overlays.textContent = "";
+	data.overlays.forEach((overlay, idx) => {
+		overlays.appendChild(createOverlayRow(idx, overlay, data.icons));
+	});
+}
+
+// A number input with its unit around it, e.g. "every [15] min".
+function createNumberInput(id, label, value, min, max, prefix, suffix) {
+	const field = document.createElement("span");
+	field.className = "wc24h-field";
+	const input = document.createElement("input");
+	input.type = "number";
+	input.id = id;
+	input.min = min;
+	input.max = max;
+	input.value = value;
+	input.setAttribute("aria-label", label);
+	input.title = label;
+	if (prefix) {
+		field.appendChild(document.createTextNode(`${prefix} `));
+	}
+	field.appendChild(input);
+	if (suffix) {
+		field.appendChild(document.createTextNode(` ${suffix}`));
+	}
+	return field;
+}
+
+function createOverlayRow(idx, overlay, iconNames) {
+	const [type, flags, interval, duration, dateCode, month, day, days, icon, text] = overlay;
+	const row = document.createElement("div");
+	row.className = "wc24h-overlay";
+
+	const active = document.createElement("input");
+	active.type = "checkbox";
+	active.id = `wc24h-overlay-active-${idx}`;
+	active.checked = (flags & OVERLAY_FLAG_ACTIVE) !== 0;
+	active.setAttribute("aria-label", i18next.t("view.wc24h.active"));
+	row.appendChild(active);
+
+	const typeSelect = document.createElement("select");
+	typeSelect.id = `wc24h-overlay-type-${idx}`;
+	typeSelect.setAttribute("aria-label", i18next.t("view.wc24h.overlay-type"));
+	OVERLAY_TYPES.forEach(([value, key]) => {
+		const option = document.createElement("option");
+		option.value = value;
+		option.textContent = i18next.t(`view.wc24h.overlay-type-${key}`);
+		typeSelect.appendChild(option);
+	});
+	typeSelect.value = type;
+	row.appendChild(typeSelect);
+
+	row.appendChild(createSelect(`wc24h-overlay-icon-${idx}`, i18next.t("view.wc24h.overlay-icon"),
+		iconNames, icon));
+
+	const textInput = document.createElement("input");
+	textInput.type = "text";
+	textInput.id = `wc24h-overlay-text-${idx}`;
+	textInput.maxLength = OVERLAY_TEXT_LENGTH;
+	textInput.value = text;
+	textInput.setAttribute("aria-label", i18next.t("view.wc24h.overlay-text"));
+	textInput.placeholder = i18next.t("view.wc24h.overlay-text");
+	row.appendChild(textInput);
+
+	row.appendChild(createNumberInput(`wc24h-overlay-interval-${idx}`,
+		i18next.t("view.wc24h.overlay-interval"), interval || 15, 1, 60,
+		i18next.t("view.wc24h.overlay-interval-prefix"), i18next.t("view.wc24h.overlay-interval-suffix")));
+	row.appendChild(createNumberInput(`wc24h-overlay-duration-${idx}`,
+		i18next.t("view.wc24h.overlay-duration"), duration || 10, 5, 255,
+		"", i18next.t("view.wc24h.overlay-duration-suffix")));
+
+	row.appendChild(createSelect(`wc24h-overlay-date-${idx}`, i18next.t("view.wc24h.overlay-date"),
+		OVERLAY_DATE_CODES.map(key => i18next.t(`view.wc24h.overlay-date-${key}`)), dateCode));
+
+	const start = document.createElement("input");
+	start.type = "text";
+	start.id = `wc24h-overlay-start-${idx}`;
+	start.maxLength = 5;
+	start.pattern = "\\d{1,2}\\.\\d{1,2}";
+	start.placeholder = i18next.t("view.wc24h.overlay-start");
+	start.setAttribute("aria-label", i18next.t("view.wc24h.overlay-start"));
+	start.value = month ? `${String(day).padStart(2, "0")}.${String(month).padStart(2, "0")}` : "";
+	row.appendChild(start);
+
+	row.appendChild(createNumberInput(`wc24h-overlay-days-${idx}`,
+		i18next.t("view.wc24h.overlay-days"), days || 1, 1, 255,
+		"", i18next.t("view.wc24h.overlay-days-suffix")));
+
+	const update = () => updateOverlayRow(row, idx);
+	typeSelect.addEventListener("change", update);
+	row.querySelector(`#wc24h-overlay-date-${idx}`).addEventListener("change", update);
+	update();
+	return row;
+}
+
+// Shows only the inputs that matter for the overlay's type and date.
+function updateOverlayRow(row, idx) {
+	const element = id => row.querySelector(`#wc24h-overlay-${id}-${idx}`);
+	const type = Number(element("type").value);
+	const dateCode = Number(element("date").value);
+	const show = (id, visible) => {
+		const input = element(id);
+		const field = input.parentElement.classList.contains("wc24h-field") ? input.parentElement : input;
+		field.style.display = visible ? "" : "none";
+	};
+	show("icon", type === OVERLAY_TYPE_ICON);
+	show("text", type === OVERLAY_TYPE_TICKER);
+	show("start", dateCode === OVERLAY_DATE_FIXED);
+	show("days", dateCode !== 0);
+}
+
+function toOverlayText(text) {
+	const umlauts = { "ä": "ae", "ö": "oe", "ü": "ue", "Ä": "AE", "Ö": "OE", "Ü": "UE", "ß": "ss" };
+	return text.replace(/[äöüÄÖÜß]/g, umlaut => umlauts[umlaut])
+		.replace(/[^\x20-\x7E]/g, "")
+		.substring(0, OVERLAY_TEXT_LENGTH);
+}
+
+function sendOverlays() {
+	let payload = "";
+	for (let i = 0; i < 8; i++) {
+		const active = document.getElementById(`wc24h-overlay-active-${i}`);
+		if (!active) {
+			return;
+		}
+		const value = id => Number(document.getElementById(`wc24h-overlay-${id}-${i}`).value) || 0;
+		const clamp = (number, min, max) => Math.min(Math.max(number, min), max);
+		const match = /^(\d{1,2})\.(\d{1,2})$/.exec(document.getElementById(`wc24h-overlay-start-${i}`).value.trim());
+		const day = match ? clamp(Number(match[1]), 1, 31) : 0;
+		const month = match ? clamp(Number(match[2]), 1, 12) : 0;
+		const text = toOverlayText(document.getElementById(`wc24h-overlay-text-${i}`).value);
+
+		payload += nstr(value("type")) +
+			nstr(active.checked ? OVERLAY_FLAG_ACTIVE : 0) +
+			nstr(clamp(value("interval"), 1, 60)) +
+			nstr(clamp(value("duration"), 5, 255)) +
+			nstr(value("date")) +
+			nstr(month) +
+			nstr(day) +
+			nstr(clamp(value("days"), 1, 255)) +
+			nstr(value("icon")) +
+			getPaddedString(text, OVERLAY_TEXT_LENGTH);
+	}
+	sendCmd(CMD.SET_OVERLAYS, payload);
+	debugMessage(`overlays${debugMessageReconfigured}`);
 }
 
 function createSelect(id, label, options, value) {
@@ -1306,6 +1470,19 @@ document.addEventListener("DOMContentLoaded", function() {
 	const nightTimersStoreBtn = document.getElementById("wc24h-night-timers-store-button");
 	if (nightTimersStoreBtn) {
 		nightTimersStoreBtn.addEventListener("click", sendNightTimers);
+	}
+
+	const overlaysStoreBtn = document.getElementById("wc24h-overlays-store-button");
+	if (overlaysStoreBtn) {
+		overlaysStoreBtn.addEventListener("click", sendOverlays);
+	}
+
+	const colorAnimation = document.getElementById("wc24h-color-animation");
+	if (colorAnimation) {
+		colorAnimation.addEventListener("change", function() {
+			sendCmd(CMD.SET_COLOR_ANIMATION, nstr(colorAnimation.value));
+			debugMessage(`colorAnimation${debugMessageReconfigured}`);
+		});
 	}
 
 	document.querySelectorAll("[id*='langvar']").forEach(el => {

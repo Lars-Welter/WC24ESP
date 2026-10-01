@@ -672,11 +672,27 @@
                             <option value="255" data-i18next="view.wc24h.native"></option>
                         </select>
                         </div>
+                        <div class="pure-control-group">
+                            <label for="wc24h-color-animation" data-i18next="view.wc24h.color-animation"></label><select name="wc24h-color-animation" id="wc24h-color-animation" size="1">
+                            <option value="0" data-i18next="view.wc24h.color-animation-none"></option>
+                            <option value="1" data-i18next="view.wc24h.color-animation-daylight"></option>
+                        </select>
+                        </div>
+                        <div class="pure-control-group">
+                            <label for="wc24h-temperature" data-i18next="view.wc24h.temperature"></label><output id="wc24h-temperature"></output>
+                        </div>
                         <fieldset>
                             <legend data-i18next="view.wc24h.night-timers-help"></legend>
                             <div class="wc24h-night-timers" id="wc24h-night-timers"></div>
                             <div class="pure-controls">
                                 <button type="button" class="pure-button pure-button-primary" id="wc24h-night-timers-store-button" data-i18next="view.wc24h.store"></button>
+                            </div>
+                        </fieldset>
+                        <fieldset>
+                            <legend data-i18next="view.wc24h.overlays-help"></legend>
+                            <div class="wc24h-overlays" id="wc24h-overlays"></div>
+                            <div class="pure-controls">
+                                <button type="button" class="pure-button pure-button-primary" id="wc24h-overlays-store-button" data-i18next="view.wc24h.store"></button>
                             </div>
                         </fieldset>
                     </form>

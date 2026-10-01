@@ -27,6 +27,7 @@ uint8_t lastMinuteArray = 0;
 uint16_t minutePixelArray[4] = {0};
 bool frameArray[200] = {false};
 bool parametersChanged = false;
+bool overlayActive = false;
 bool layoutChanged = false;
 bool colorChangedByWebsite = false;
 uint8_t statusAccessPoint = 0;

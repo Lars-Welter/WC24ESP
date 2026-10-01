@@ -966,7 +966,8 @@ input:checked + .slider::before {
     display: none;
 }
 
-.wc24h-night-timer {
+.wc24h-night-timer,
+.wc24h-overlay {
     display: flex;
     flex-wrap: wrap;
     gap: 0.5em;
@@ -976,7 +977,27 @@ input:checked + .slider::before {
 
 .wc24h-night-timer select,
 .wc24h-night-timer input[type="time"],
-.wc24h-night-timer input[type="checkbox"] {
+.wc24h-night-timer input[type="checkbox"],
+.wc24h-overlay select,
+.wc24h-overlay input {
     width: auto;
     margin: 0;
+}
+
+.wc24h-overlay input[type="number"],
+.wc24h-overlay input[id^="wc24h-overlay-start"] {
+    width: 4.5em;
+}
+
+.wc24h-overlay input[id^="wc24h-overlay-text"] {
+    width: 14em;
+}
+
+.wc24h-field {
+    white-space: nowrap;
+}
+
+.wc24h-overlay {
+    padding-bottom: 0.5em;
+    border-bottom: 1px solid #e5e5e5;
 }

@@ -353,7 +353,7 @@
  */
 // Differs from upstream on purpose: an EEPROM written by the stock upstream
 // firmware is re-initialised with the SP803E defaults on first boot.
-#define SERNR 2441
+#define SERNR 2442
 //--------------------------------------------------------------------------
 // Toggle Serial DEBUG Output
 //--------------------------------------------------------------------------

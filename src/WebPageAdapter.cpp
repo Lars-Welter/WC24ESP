@@ -1,7 +1,9 @@
 #include "WebPageAdapter.h"
 
 #include "WC24h/NightTimer.h"
+#include "WC24h/Overlay.h"
 #include "WC24h/Wc24hDisplay.h"
+#include "WC24h/Wc24hIcons.h"
 #include "WordClock.h" // sendMQTTUpdate()
 #include <Arduino.h>
 
@@ -33,8 +35,11 @@ constexpr size_t COLOR_PAYLOAD_LENGTH = 21;
 constexpr size_t EFFECT_PAYLOAD_LENGTH = 27;
 // Per night timer: flags, hour and minute with three digits each.
 constexpr size_t NIGHT_TIMER_PAYLOAD_LENGTH = 9;
+// Per overlay: nine numbers with three digits each and the padded text.
+constexpr size_t OVERLAY_TEXT_PAYLOAD_LENGTH = wc24h::OVERLAY_TEXT_LENGTH - 1;
+constexpr size_t OVERLAY_PAYLOAD_LENGTH = 9 * 3 + OVERLAY_TEXT_PAYLOAD_LENGTH;
 
-uint32_t split(const uint8_t *payload, uint8_t start, uint8_t length = 3) {
+uint32_t split(const uint8_t *payload, size_t start, uint8_t length = 3) {
     char buf[16] = {0};
     if (length > 15)
         length = 15;
@@ -525,6 +530,63 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload,
             if (mode < wc24h::DISPLAY_MODES_COUNT ||
                 mode == WC24H_DISPLAY_MODE_NATIVE) {
                 G.wc24hDisplayMode = mode;
+            }
+            break;
+        }
+
+            //------------------------------------------------------------------------------
+
+        case COMMAND_SET_OVERLAYS: {
+            if (length < 3 + wc24h::MAX_OVERLAYS * OVERLAY_PAYLOAD_LENGTH) {
+                Serial.println("Overlays ignored - incomplete payload");
+                break;
+            }
+            for (uint8_t i = 0; i < wc24h::MAX_OVERLAYS; i++) {
+                const size_t start = 3 + i * OVERLAY_PAYLOAD_LENGTH;
+                const uint32_t type = split(payload, start);
+                const uint32_t flags = split(payload, start + 3);
+                const uint32_t interval = split(payload, start + 6);
+                const uint32_t duration = split(payload, start + 9);
+                const uint32_t dateCode = split(payload, start + 12);
+                const uint32_t month = split(payload, start + 15);
+                const uint32_t day = split(payload, start + 18);
+                const uint32_t days = split(payload, start + 21);
+                const uint32_t icon = split(payload, start + 24);
+                if ((type != wc24h::OVERLAY_NONE &&
+                     !wc24h::isOverlayTypeSupported(type)) ||
+                    interval < 1 || interval > 60 || duration > 255 ||
+                    dateCode >= wc24h::DATE_CODE_COUNT || month > 12 ||
+                    day > 31 || days > 255 || icon >= wc24h::ICON_COUNT) {
+                    continue;
+                }
+                wc24h::Overlay overlay = {};
+                overlay.type = type;
+                overlay.flags = flags & wc24h::OVERLAY_FLAG_ACTIVE;
+                overlay.interval = interval;
+                overlay.duration = duration;
+                overlay.dateCode = dateCode;
+                overlay.month = month;
+                overlay.day = day;
+                overlay.days = days;
+                overlay.icon = icon;
+                memcpy(overlay.text, payload + start + 27,
+                       OVERLAY_TEXT_PAYLOAD_LENGTH);
+                overlay.text[OVERLAY_TEXT_PAYLOAD_LENGTH] = '\0';
+                for (int8_t c = OVERLAY_TEXT_PAYLOAD_LENGTH - 1;
+                     c >= 0 && isSpace(overlay.text[c]); c--) {
+                    overlay.text[c] = '\0';
+                }
+                G.overlays[i] = overlay;
+            }
+            break;
+        }
+
+            //------------------------------------------------------------------------------
+
+        case COMMAND_SET_COLOR_ANIMATION: {
+            const uint32_t animation = split(payload, 3);
+            if (animation <= COLOR_ANIMATION_DAYLIGHT) {
+                G.colorAnimation = animation;
             }
             break;
         }

@@ -87,7 +87,7 @@ void deleteActiveLedStrip() {
 #include "TransitionTypes/Transition.hpp"
 
 namespace {
-constexpr uint16_t EEPROM_SIZE = 512;
+constexpr uint16_t EEPROM_SIZE = 1024;
 constexpr uint16_t POWER_CYCLE_COUNT_ADDRESS = EEPROM_SIZE - 1;
 constexpr uint8_t POWER_CYCLE_RESET_LIMIT = 5;
 constexpr uint8_t CAPTIVE_PORTAL_POWER_CYCLE_COUNT = 3;
@@ -278,9 +278,43 @@ void ensureHardwarePins() {
 
 //------------------------------------------------------------------------------
 
+void setDefaultOverlays() {
+    using namespace wc24h;
+    memset(G.overlays, 0, sizeof(G.overlays));
+    // Typical overlays of the WordClock24h firmware, switched off.
+    G.overlays[0] = {OVERLAY_DATE, 0, 30, 10, DATE_ALWAYS, 0, 0, 0, 0, ""};
+    G.overlays[1] = {
+        OVERLAY_TEMPERATURE, 0, 10, 10, DATE_ALWAYS, 0, 0, 0, 0, ""};
+    G.overlays[2] = {OVERLAY_ICON, 0, 15, 10, DATE_FIXED, 2, 14, 1, 0, ""};
+    G.overlays[3] = {OVERLAY_ICON, 0, 15, 10, DATE_ADVENT1, 0, 0, 30, 1, ""};
+    G.overlays[4] = {OVERLAY_ICON, 0, 5, 10, DATE_FIXED, 12, 31, 2, 2, ""};
+    G.overlays[5] = {OVERLAY_TICKER, 0, 60, 10, DATE_ALWAYS, 0, 0, 0, 0,
+                     "WORDCLOCK 24H"};
+}
+
+//------------------------------------------------------------------------------
+
+bool overlaysAreValid() {
+    for (const wc24h::Overlay &overlay : G.overlays) {
+        if ((overlay.type != wc24h::OVERLAY_NONE &&
+             !wc24h::isOverlayTypeSupported(overlay.type)) ||
+            overlay.interval > 60 ||
+            overlay.dateCode >= wc24h::DATE_CODE_COUNT ||
+            overlay.icon >= wc24h::ICON_COUNT ||
+            memchr(overlay.text, '\0', sizeof(overlay.text)) == nullptr) {
+            return false;
+        }
+    }
+    return true;
+}
+
+//------------------------------------------------------------------------------
+
 void setDefaultWc24hSettings() {
     G.wc24hDisplayMode = DEFAULT_WC24H_DISPLAY_MODE;
     memset(G.nightTimers, 0, sizeof(G.nightTimers));
+    setDefaultOverlays();
+    G.colorAnimation = COLOR_ANIMATION_NONE;
 }
 
 //------------------------------------------------------------------------------
@@ -288,6 +322,9 @@ void setDefaultWc24hSettings() {
 void ensureWc24hSettings() {
     bool valid = G.wc24hDisplayMode < wc24h::DISPLAY_MODES_COUNT ||
                  G.wc24hDisplayMode == WC24H_DISPLAY_MODE_NATIVE;
+
+    valid = valid && overlaysAreValid() &&
+            G.colorAnimation <= COLOR_ANIMATION_DAYLIGHT;
 
     for (const NightTimer &timer : G.nightTimers) {
         if (timer.hour > 23 || timer.minute > 59 ||
