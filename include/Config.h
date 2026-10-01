@@ -215,6 +215,30 @@
 // layout for the Turkish language
 
 //--------------------------------------------------------------------------
+// WordClock24h display mode (only for the layout Ger16x18)
+//--------------------------------------------------------------------------
+/*
+ * The display modes of the original WordClock24h firmware. Can be changed in
+ * the web interface at any time.
+ *
+ *   0 hh mm (12-)          9 Oesi (12-)          18 Wessi (12-)
+ *   1 hh mm (12)          10 Oesi (12)           19 Wessi (12)
+ *   2 hh mm (12+)         11 Oesi (12+)          20 Wessi (12+)
+ *   3 hh mm (24-)         12 Rhein/Ruhr (12-)    21 Tirol (12-)
+ *   4 hh mm (24)          13 Rhein/Ruhr (12)     22 Tirol (12)
+ *   5 hh mm (24+)         14 Rhein/Ruhr (12+)    23 Tirol (12+)
+ *   6 Ossi/Berlin (12-)   15 Schwaben (12-)      24 Countdown
+ *   7 Ossi/Berlin (12)    16 Schwaben (12)       25 Jester
+ *   8 Ossi/Berlin (12+)   17 Schwaben (12+)      26 Temperatur
+ *
+ * 255 keeps the phrasing of the multilayout firmware instead
+ * ("ES IST DREIZEHN UHR UND SIEBENUNDDREISSIG MINUTEN MITTAGS").
+ *
+ * Valid values [0 ... 26, 255]
+ */
+#define DEFAULT_WC24H_DISPLAY_MODE 13
+
+//--------------------------------------------------------------------------
 // Define LED Type
 //--------------------------------------------------------------------------
 /*
@@ -329,7 +353,7 @@
  */
 // Differs from upstream on purpose: an EEPROM written by the stock upstream
 // firmware is re-initialised with the SP803E defaults on first boot.
-#define SERNR 2440
+#define SERNR 2441
 //--------------------------------------------------------------------------
 // Toggle Serial DEBUG Output
 //--------------------------------------------------------------------------

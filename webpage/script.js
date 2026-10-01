@@ -106,6 +106,8 @@ const CMD = {
 	SET_IT_IS_VARIANT: 106,
 	SET_HARDWARE_PINS: 107,
 	SET_TIMEZONE: 108,
+	SET_WC24H_DISPLAY_MODE: 109,
+	SET_NIGHT_TIMERS: 110,
 	SPEED: 152,
 
 	// Requests
@@ -116,8 +118,12 @@ const CMD = {
 	REQ_TRANSITION: 204,
 	REQ_MQTT_VALUES: 205,
 	REQ_BIRTHDAYS: 206,
-	REQ_I2C_SCAN: 207
+	REQ_I2C_SCAN: 207,
+	REQ_WC24H: 208
 };
+
+const NIGHT_TIMER_FLAG_ACTIVE = 0x80;
+const NIGHT_TIMER_FLAG_SWITCH_ON = 0x40;
 
 /**
  * Maps the mode to the corresponding input id on the functions page.
@@ -341,6 +347,10 @@ function initWebsocket() {
 				mqttTopic.setAttribute("maxlength", DATA_MQTT_RESPONSE_TEXT_LENGTH);
 				break;
 			}
+			case "wc24h":
+				renderWc24h(data);
+				break;
+
 			case "birthdays":
 				hasSpecialWordHappyBirthday = data.hasSpecialWordHappyBirthday;
 				for (let i = 0; i < 5; i++) {
@@ -692,6 +702,104 @@ function sendColorData(command, addData = "") {
 	nstr(effectSpeed));
 }
 
+function renderWc24h(data) {
+	const box = document.getElementById("wc24h-box");
+	if (!box) {
+		return;
+	}
+	box.style.display = data.hasWc24hTables ? "block" : "none";
+	if (!data.hasWc24hTables) {
+		return;
+	}
+
+	const select = document.getElementById("wc24h-display-mode");
+	select.querySelectorAll("option:not([value='255'])").forEach(option => option.remove());
+	data.displayModes.forEach((name, idx) => {
+		const option = document.createElement("option");
+		option.value = idx;
+		option.textContent = name;
+		select.appendChild(option);
+	});
+	select.value = data.displayMode;
+
+	const container = document.getElementById("wc24h-night-timers");
+	container.textContent = "";
+	data.nightTimers.forEach((timer, idx) => {
+		container.appendChild(createNightTimerRow(idx, timer[0], timer[1], timer[2]));
+	});
+}
+
+function createSelect(id, label, options, value) {
+	const select = document.createElement("select");
+	select.id = id;
+	select.setAttribute("aria-label", label);
+	options.forEach((text, idx) => {
+		const option = document.createElement("option");
+		option.value = idx;
+		option.textContent = text;
+		select.appendChild(option);
+	});
+	select.value = value;
+	return select;
+}
+
+function createNightTimerRow(idx, flags, hour, minute) {
+	const row = document.createElement("div");
+	row.className = "wc24h-night-timer";
+
+	const active = document.createElement("input");
+	active.type = "checkbox";
+	active.id = `wc24h-night-timer-active-${idx}`;
+	active.checked = (flags & NIGHT_TIMER_FLAG_ACTIVE) !== 0;
+	active.setAttribute("aria-label", i18next.t("view.wc24h.active"));
+	row.appendChild(active);
+
+	const weekdays = [0, 1, 2, 3, 4, 5, 6].map(day => i18next.t(`view.wc24h.weekday-${day}`));
+	row.appendChild(createSelect(`wc24h-night-timer-from-${idx}`, i18next.t("view.wc24h.from-day"),
+		weekdays, (flags >> 3) & 0x07));
+	row.appendChild(createSelect(`wc24h-night-timer-to-${idx}`, i18next.t("view.wc24h.to-day"),
+		weekdays, flags & 0x07));
+
+	const time = document.createElement("input");
+	time.type = "time";
+	time.id = `wc24h-night-timer-time-${idx}`;
+	time.value = `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+	time.setAttribute("aria-label", i18next.t("view.wc24h.time"));
+	row.appendChild(time);
+
+	row.appendChild(createSelect(`wc24h-night-timer-action-${idx}`, i18next.t("view.wc24h.action"),
+		[i18next.t("view.wc24h.switch-off"), i18next.t("view.wc24h.switch-on")],
+		(flags & NIGHT_TIMER_FLAG_SWITCH_ON) ? 1 : 0));
+
+	return row;
+}
+
+function sendNightTimers() {
+	let payload = "";
+	for (let i = 0; i < 8; i++) {
+		const active = document.getElementById(`wc24h-night-timer-active-${i}`);
+		if (!active) {
+			return;
+		}
+		const fromDay = Number(document.getElementById(`wc24h-night-timer-from-${i}`).value);
+		const toDay = Number(document.getElementById(`wc24h-night-timer-to-${i}`).value);
+		const switchOn = document.getElementById(`wc24h-night-timer-action-${i}`).value === "1";
+		const time = document.getElementById(`wc24h-night-timer-time-${i}`).value || "00:00";
+		const [hour, minute] = time.split(":");
+
+		let flags = (fromDay << 3) | toDay;
+		if (active.checked) {
+			flags |= NIGHT_TIMER_FLAG_ACTIVE;
+		}
+		if (switchOn) {
+			flags |= NIGHT_TIMER_FLAG_SWITCH_ON;
+		}
+		payload += nstr(flags) + nstr(hour) + nstr(minute);
+	}
+	sendCmd(CMD.SET_NIGHT_TIMERS, payload);
+	debugMessage(`nightTimers${debugMessageReconfigured}`);
+}
+
 function showRebootRecommendedBanner() {
 	const rebootRecommendedEl = document.getElementById("section-reboot-recommended");
 	if (rebootRecommendedEl) rebootRecommendedEl.style.display = "block";
@@ -788,6 +896,7 @@ document.addEventListener("DOMContentLoaded", function() {
 			}
 			if (navigation === "frontoptions") {
 				sendCmd(CMD.REQ_CONFIG_VALUES);
+				sendCmd(CMD.REQ_WC24H);
 			}
 			if (navigation === "main" || navigation === "settings" || navigation === "frontoptions") {
 				sendCmd(CMD.REQ_CONFIG_VALUES);
@@ -1185,6 +1294,19 @@ document.addEventListener("DOMContentLoaded", function() {
 			debugMessage(`itIsVar${debugMessageReconfigured}`);
 		});
 	});
+
+	const wc24hDisplayMode = document.getElementById("wc24h-display-mode");
+	if (wc24hDisplayMode) {
+		wc24hDisplayMode.addEventListener("change", function() {
+			sendCmd(CMD.SET_WC24H_DISPLAY_MODE, nstr(wc24hDisplayMode.value));
+			debugMessage(`wc24hDisplayMode${debugMessageReconfigured}`);
+		});
+	}
+
+	const nightTimersStoreBtn = document.getElementById("wc24h-night-timers-store-button");
+	if (nightTimersStoreBtn) {
+		nightTimersStoreBtn.addEventListener("click", sendNightTimers);
+	}
 
 	document.querySelectorAll("[id*='langvar']").forEach(el => {
 		el.addEventListener("change", function() {

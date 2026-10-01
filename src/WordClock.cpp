@@ -278,6 +278,36 @@ void ensureHardwarePins() {
 
 //------------------------------------------------------------------------------
 
+void setDefaultWc24hSettings() {
+    G.wc24hDisplayMode = DEFAULT_WC24H_DISPLAY_MODE;
+    memset(G.nightTimers, 0, sizeof(G.nightTimers));
+}
+
+//------------------------------------------------------------------------------
+
+void ensureWc24hSettings() {
+    bool valid = G.wc24hDisplayMode < wc24h::DISPLAY_MODES_COUNT ||
+                 G.wc24hDisplayMode == WC24H_DISPLAY_MODE_NATIVE;
+
+    for (const NightTimer &timer : G.nightTimers) {
+        if (timer.hour > 23 || timer.minute > 59 ||
+            ((timer.flags & wc24h::NIGHT_FROM_DAY_MASK) >> 3) > 6 ||
+            (timer.flags & wc24h::NIGHT_TO_DAY_MASK) > 6) {
+            valid = false;
+        }
+    }
+
+    if (valid) {
+        return;
+    }
+
+    Serial.println("Invalid WordClock24h settings in EEPROM, restoring defaults");
+    setDefaultWc24hSettings();
+    eeprom::write();
+}
+
+//------------------------------------------------------------------------------
+
 void ensureI2CPins() {
     if (i2cBus::pinsAreValid(G.i2cSdaPin, G.i2cSclPin)) {
         return;
@@ -311,6 +341,7 @@ void setup() {
     ensureHardwarePins();
     ensureI2CPins();
     ensureTimezone();
+    ensureWc24hSettings();
 
     //-------------------------------------
 
@@ -467,6 +498,7 @@ void setup() {
         }
         setDefaultHardwarePins();
         i2cBus::setDefaultPins(G.i2cSdaPin, G.i2cSclPin);
+        setDefaultWc24hSettings();
 
         eeprom::write();
         Serial.println("EEPROM written");

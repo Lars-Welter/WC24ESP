@@ -6,6 +6,7 @@
 #define PAYLOAD_LENGTH 30
 #define MAX_ROW_SIZE 22
 #define MAX_BIRTHDAY_COUNT 5
+#define MAX_NIGHT_TIMERS 8
 
 // The Unique ID is a cross-reference for HTML/JavaScript
 
@@ -110,6 +111,17 @@ struct Birthday {
     uint8_t day;
     uint8_t month;
 };
+
+// Night timer of the WordClock24h firmware, flags see WC24h/NightTimer.h.
+struct NightTimer {
+    uint8_t flags;
+    uint8_t hour;
+    uint8_t minute;
+};
+
+// Value of GLOBAL::wc24hDisplayMode that keeps the phrasing of the
+// multilayout firmware instead of a WordClock24h display mode.
+constexpr uint8_t WC24H_DISPLAY_MODE_NATIVE = UINT8_MAX;
 
 constexpr uint8_t HARDWARE_PIN_DISABLED = UINT8_MAX;
 
@@ -255,6 +267,9 @@ struct GLOBAL {
     char timezone[PAYLOAD_LENGTH];
     uint8_t i2cSdaPin;
     uint8_t i2cSclPin;
+
+    uint8_t wc24hDisplayMode;
+    NightTimer nightTimers[MAX_NIGHT_TIMERS];
 };
 extern GLOBAL G;
 
@@ -366,6 +381,8 @@ enum CommandWords : uint8_t {
     COMMAND_SET_IT_IS_VARIANT = 106,
     COMMAND_SET_HARDWARE_PINS = 107,
     COMMAND_SET_TIMEZONE = 108,
+    COMMAND_SET_WC24H_DISPLAY_MODE = 109,
+    COMMAND_SET_NIGHT_TIMERS = 110,
 
     COMMAND_SPEED = 152,
 
@@ -379,6 +396,7 @@ enum CommandWords : uint8_t {
     COMMAND_REQUEST_MQTT_VALUES = 205,
     COMMAND_REQUEST_BIRTHDAYS = 206,
     COMMAND_REQUEST_I2C_SCAN = 207,
+    COMMAND_REQUEST_WC24H = 208,
 
     PLACEHOLDER_MAX_REQUEST = 255,
 };

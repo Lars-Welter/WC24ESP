@@ -199,6 +199,27 @@ let TRANSLATION_EN_US = {
 			"quarter-to-ten-english": "Quarter to Ten",
 			"a-quarter-to-ten-english": "A Quarter to Ten"
 		},
+		"wc24h": {
+			"h2": "WordClock24h",
+			"display-mode": "Display mode",
+			"native": "Multilayout (ES IST hh UHR UND mm MINUTEN)",
+			"night-timers-help": "Night timers: switch the display on or off at the given time on the selected weekdays.",
+			"active": "Active",
+			"from-day": "From weekday",
+			"to-day": "To weekday",
+			"time": "Time",
+			"action": "Action",
+			"switch-off": "Switch off",
+			"switch-on": "Switch on",
+			"weekday-0": "Sun",
+			"weekday-1": "Mon",
+			"weekday-2": "Tue",
+			"weekday-3": "Wed",
+			"weekday-4": "Thu",
+			"weekday-5": "Fri",
+			"weekday-6": "Sat",
+			"store": "Save"
+		},
 		"minutes": {
 			"h2": "Minutes",
 			"mode": "Minutes View Mode",

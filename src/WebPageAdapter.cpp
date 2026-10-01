@@ -1,5 +1,7 @@
 #include "WebPageAdapter.h"
 
+#include "WC24h/NightTimer.h"
+#include "WC24h/Wc24hDisplay.h"
 #include "WordClock.h" // sendMQTTUpdate()
 #include <Arduino.h>
 
@@ -29,6 +31,8 @@ namespace {
 
 constexpr size_t COLOR_PAYLOAD_LENGTH = 21;
 constexpr size_t EFFECT_PAYLOAD_LENGTH = 27;
+// Per night timer: flags, hour and minute with three digits each.
+constexpr size_t NIGHT_TIMER_PAYLOAD_LENGTH = 9;
 
 uint32_t split(const uint8_t *payload, uint8_t start, uint8_t length = 3) {
     char buf[16] = {0};
@@ -516,6 +520,41 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload,
 
             //------------------------------------------------------------------------------
 
+        case COMMAND_SET_WC24H_DISPLAY_MODE: {
+            const uint32_t mode = split(payload, 3);
+            if (mode < wc24h::DISPLAY_MODES_COUNT ||
+                mode == WC24H_DISPLAY_MODE_NATIVE) {
+                G.wc24hDisplayMode = mode;
+            }
+            break;
+        }
+
+            //------------------------------------------------------------------------------
+
+        case COMMAND_SET_NIGHT_TIMERS: {
+            if (length < 3 + MAX_NIGHT_TIMERS * NIGHT_TIMER_PAYLOAD_LENGTH) {
+                Serial.println("Night timers ignored - incomplete payload");
+                break;
+            }
+            for (uint8_t i = 0; i < MAX_NIGHT_TIMERS; i++) {
+                const uint8_t start = 3 + i * NIGHT_TIMER_PAYLOAD_LENGTH;
+                const uint32_t flags = split(payload, start);
+                const uint32_t hour = split(payload, start + 3);
+                const uint32_t minute = split(payload, start + 6);
+                if (flags > UINT8_MAX || hour > 23 || minute > 59 ||
+                    ((flags & wc24h::NIGHT_FROM_DAY_MASK) >> 3) > 6 ||
+                    (flags & wc24h::NIGHT_TO_DAY_MASK) > 6) {
+                    continue;
+                }
+                G.nightTimers[i] = {static_cast<uint8_t>(flags),
+                                    static_cast<uint8_t>(hour),
+                                    static_cast<uint8_t>(minute)};
+            }
+            break;
+        }
+
+            //------------------------------------------------------------------------------
+
         case COMMAND_SET_BOOT: {
             G.bootLedBlink = split(payload, 3);
             G.bootLedSweep = split(payload, 6);
@@ -544,6 +583,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload,
             //------------------------------------------------------------------------------
 
         case COMMAND_REQUEST_BIRTHDAYS:
+        case COMMAND_REQUEST_WC24H:
         case COMMAND_REQUEST_MQTT_VALUES:
         case COMMAND_REQUEST_CONFIG_VALUES:
         case COMMAND_REQUEST_COLOR_VALUES:

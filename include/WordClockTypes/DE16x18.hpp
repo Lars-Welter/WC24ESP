@@ -62,6 +62,10 @@ public:
 
     //------------------------------------------------------------------------------
 
+    virtual bool hasWc24hTables() override { return true; }
+
+    //------------------------------------------------------------------------------
+
     void show(FrontWord word) override {
         switch (word) {
 

@@ -246,6 +246,10 @@ public:
 
     virtual bool hasDaytimeWords() { return false; }
 
+    // Front panel matches the WordClock24h layout, so its display mode tables
+    // (WC24h/Wc24hTablesDE.h) can drive it.
+    virtual bool hasWc24hTables() { return false; }
+
     // --- Minute Display Capabilities ---
 
     virtual bool hasLed4x() { return true; }

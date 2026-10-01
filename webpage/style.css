@@ -961,3 +961,22 @@ input:checked + .slider::before {
         scroll-behavior: auto !important;
     }
 }
+
+.box-wc24h {
+    display: none;
+}
+
+.wc24h-night-timer {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5em;
+    align-items: center;
+    margin-bottom: 0.5em;
+}
+
+.wc24h-night-timer select,
+.wc24h-night-timer input[type="time"],
+.wc24h-night-timer input[type="checkbox"] {
+    width: auto;
+    margin: 0;
+}

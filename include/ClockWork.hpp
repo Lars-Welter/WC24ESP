@@ -4,6 +4,8 @@
 #include "OpenWeatherMap.h"
 #include "SensitiveData.h"
 #include "TransitionTypes/Transition.h"
+#include "WC24h/NightTimer.h"
+#include "WC24h/Wc24hDisplay.h"
 #include "WordClockState.h"
 #include "WordClockTypes/ClockType.hpp"
 #include "math.h"
@@ -1363,6 +1365,10 @@ void ClockWork::setItIs(uint8_t min, const uint8_t offsetHour) {
 //------------------------------------------------------------------------------
 
 void ClockWork::setClock() {
+    if (setClockWc24h()) {
+        return;
+    }
+
     uint8_t offsetHour = 0;
     bool fullHour = 0;
 
@@ -1421,6 +1427,99 @@ void ClockWork::DetermineWhichItIsToShow(uint8_t hour, uint8_t min) {
         usedClockType->show(FrontWord::es_ist___plural___);
     } else {
         usedClockType->show(FrontWord::es_ist);
+    }
+}
+
+//------------------------------------------------------------------------------
+// WordClock24h Functions
+//------------------------------------------------------------------------------
+
+namespace {
+// Only the DS3231 has a temperature sensor; the overload resolution picks the
+// template for every other RTC type.
+bool readRtcTemperature(RTC_DS3231 &rtc, float &celsius) {
+    celsius = rtc.getTemperature();
+    return true;
+}
+
+template <typename Rtc> bool readRtcTemperature(Rtc &, float &) {
+    return false;
+}
+} // namespace
+
+//------------------------------------------------------------------------------
+
+bool ClockWork::readTemperatureIndex(uint8_t &temperatureIndex) {
+    float celsius;
+    if (!externalRTC || !readRtcTemperature(RTC, celsius)) {
+        return false;
+    }
+    if (celsius < 0.f || celsius > 127.f) {
+        return false;
+    }
+    temperatureIndex = static_cast<uint8_t>(lroundf(celsius * 2.f));
+    return true;
+}
+
+//------------------------------------------------------------------------------
+
+void ClockWork::showWc24hWords(const bool *words, bool showItIs) {
+    const uint8_t cols = usedClockType->colsWordMatrix();
+
+    for (uint8_t idx = 1; idx < wc24h::WP_COUNT; idx++) {
+        if (!words[idx]) {
+            continue;
+        }
+        const wc24h::WORD_ILLUMINATION &word = wc24h::illumination[idx];
+        if ((word.len & wc24h::ILLUMINATION_FLAG_IT_IS) && !showItIs) {
+            continue;
+        }
+        // The tables count columns from the left, the front matrix from the
+        // right.
+        const uint8_t len = word.len & wc24h::ILLUMINATION_LEN_MASK;
+        usedClockType->setFrontMatrixWord(word.row, cols - word.col - len,
+                                          cols - 1 - word.col);
+    }
+}
+
+//------------------------------------------------------------------------------
+
+bool ClockWork::setClockWc24h() {
+    if (!usedClockType->hasWc24hTables() ||
+        G.wc24hDisplayMode >= wc24h::DISPLAY_MODES_COUNT) {
+        return false;
+    }
+
+    wc24h::WordSet words;
+
+    if (G.wc24hDisplayMode == wc24h::TEMPERATURE_MODE) {
+        uint8_t temperatureIndex;
+        // Without a usable temperature the clock keeps showing the time.
+        if (!readTemperatureIndex(temperatureIndex) ||
+            !wc24h::fillTemperatureWords(temperatureIndex, words)) {
+            return false;
+        }
+    } else {
+        wc24h::fillWords(G.wc24hDisplayMode, _hour, _minute, words);
+    }
+
+    showWc24hWords(words, DetermineIfItIsIsShown(_minute));
+    return true;
+}
+
+//------------------------------------------------------------------------------
+
+void ClockWork::loopNightTimers(const struct tm &tm) {
+    const bool powerIsOn = led.getState();
+
+    for (const NightTimer &timer : G.nightTimers) {
+        if (wc24h::nightTimerFires(timer.flags, timer.hour, timer.minute,
+                                   powerIsOn, tm.tm_wday, tm.tm_hour,
+                                   tm.tm_min)) {
+            led.setState(!powerIsOn);
+            requestHardwareButtonDisplayRefresh();
+            return;
+        }
     }
 }
 
@@ -1507,6 +1606,7 @@ void ClockWork::loop(struct tm &tm) {
     //------------------------------------------------
     if (lastMinute != _minute) {
         lastMinute = _minute;
+        loopNightTimers(tm);
         if (colorChangedByWebsite) {
             eeprom::write();
             colorChangedByWebsite = false;
@@ -1648,6 +1748,27 @@ void ClockWork::loop(struct tm &tm) {
         break;
     }
 
+    case COMMAND_REQUEST_WC24H: {
+        DynamicJsonDocument config(2048);
+        config["command"] = "wc24h";
+        config["hasWc24hTables"] = usedClockType->hasWc24hTables();
+        config["displayMode"] = G.wc24hDisplayMode;
+        JsonArray modes = config.createNestedArray("displayModes");
+        for (uint8_t i = 0; i < wc24h::DISPLAY_MODES_COUNT; i++) {
+            modes.add(wc24h::modeName(i));
+        }
+        JsonArray timers = config.createNestedArray("nightTimers");
+        for (const NightTimer &timer : G.nightTimers) {
+            JsonArray entry = timers.createNestedArray();
+            entry.add(timer.flags);
+            entry.add(timer.hour);
+            entry.add(timer.minute);
+        }
+
+        sendJsonToClient(G.client_nr, config);
+        break;
+    }
+
     case COMMAND_REQUEST_COLOR_VALUES: {
         DynamicJsonDocument config(768);
         config["command"] = "set";
@@ -1732,6 +1853,13 @@ void ClockWork::loop(struct tm &tm) {
         G.buildTypeDef = static_cast<BuildTypeDef>(G.param1);
         eeprom::write();
         led.clear();
+        parametersChanged = true;
+        break;
+    }
+
+    case COMMAND_SET_WC24H_DISPLAY_MODE:
+    case COMMAND_SET_NIGHT_TIMERS: {
+        eeprom::write();
         parametersChanged = true;
         break;
     }

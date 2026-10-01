@@ -81,6 +81,14 @@ private:
     void DetermineWhichItIsToShow(uint8_t offsetHour, uint8_t min);
     void clearClockByProgInit();
 
+    //------------------------------------------------------------------------------
+    // WordClock24h Functions
+    //------------------------------------------------------------------------------
+    bool setClockWc24h();
+    void showWc24hWords(const bool *words, bool showItIs);
+    bool readTemperatureIndex(uint8_t &temperatureIndex);
+    void loopNightTimers(const struct tm &tm);
+
 public:
     // ClockWork() = default;
     ~ClockWork() = default;
