@@ -1,0 +1,113 @@
+name: Release
+
+# Builds the firmware and publishes it as a GitHub release.
+# Triggered by pushing a tag like `v4.4.1`, or manually for an existing tag.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to (re)build the release for, e.g. v4.4.1"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+
+    runs-on: ubuntu-latest
+
+    env:
+      TAG: ${{ github.event.inputs.tag || github.ref_name }}
+
+    steps:
+    - uses: actions/checkout@v7
+      with:
+        ref: ${{ env.TAG }}
+    - name: Cache PlatformIO
+      uses: actions/cache@v6
+      with:
+        path: |
+          ~/.platformio/.cache
+          ~/.platformio/packages
+          ~/.platformio/platforms
+        key: pio-${{ runner.os }}-${{ hashFiles('platformio.ini') }}
+        restore-keys: pio-${{ runner.os }}-
+    - name: Set up Python
+      uses: actions/setup-python@v7
+      with:
+        python-version: "3.x"
+    - name: Set up Node
+      uses: actions/setup-node@v7
+      with:
+        node-version: "22"
+        cache: npm
+    - name: Install PlatformIO and esptool
+      run: |
+        python -m pip install --upgrade pip
+        pip install --upgrade platformio "esptool>=4.7,<5"
+    - name: Build firmware
+      run: pio run -e SP803E
+    - name: Package binaries
+      run: |
+        BUILD=.pio/build/SP803E
+        BOOT_APP0=~/.platformio/packages/framework-arduinoespressif32/tools/partitions/boot_app0.bin
+        NAME="WC24ESP-SP803E-${TAG}"
+        mkdir dist
+        # Complete image for a first install over USB, flashed at offset 0x0.
+        python -m esptool --chip esp32 merge_bin \
+          -o "dist/${NAME}-factory.bin" \
+          --flash_mode dio --flash_freq 40m --flash_size 4MB \
+          0x1000 "$BUILD/bootloader.bin" \
+          0x8000 "$BUILD/partitions.bin" \
+          0xe000 "$BOOT_APP0" \
+          0x10000 "$BUILD/firmware.bin"
+        # Application only, for updates through the web interface (/update).
+        cp "$BUILD/firmware.bin" "dist/${NAME}-update.bin"
+        (cd dist && sha256sum *.bin > SHA256SUMS.txt)
+        ls -l dist
+    - name: Write release notes
+      run: |
+        NAME="WC24ESP-SP803E-${TAG}"
+        cat > notes.md <<EOF
+        Firmware für die WordClock 24h auf dem BTF-LIGHTING SP803E.
+
+        | Datei | Wofür |
+        | --- | --- |
+        | \`${NAME}-factory.bin\` | **Erstinstallation** per USB-C (ersetzt WLED), Adresse \`0x0\` |
+        | \`${NAME}-update.bin\` | **Update** einer bereits installierten Uhr über die Weboberfläche |
+        | \`SHA256SUMS.txt\` | Prüfsummen |
+
+        ### Erstinstallation ohne Programmierumgebung
+
+        1. SP803E per USB-C-Datenkabel an den Rechner anschließen.
+        2. In Chrome oder Edge https://espressif.github.io/esptool-js/ öffnen, Baudrate 921600, **Connect**.
+        3. **Erase Flash** ausführen (entfernt WLED samt Einstellungen).
+        4. \`${NAME}-factory.bin\` an Flash Address \`0x0\` auswählen und **Program** klicken.
+        5. Controller neu starten und mit dem WLAN \`Connect_to_Wordclock\` verbinden.
+
+        Alternativ auf der Kommandozeile:
+
+        \`\`\`sh
+        esptool.py --chip esp32 erase_flash
+        esptool.py --chip esp32 write_flash 0x0 ${NAME}-factory.bin
+        \`\`\`
+
+        ### Update
+
+        In der Weboberfläche der Uhr \`http://<ip-der-uhr>/update\` öffnen und
+        \`${NAME}-update.bin\` hochladen. Einstellungen bleiben erhalten.
+        EOF
+    - name: Publish release
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        if gh release view "$TAG" > /dev/null 2>&1; then
+          gh release upload "$TAG" dist/* --clobber
+          gh release edit "$TAG" --notes-file notes.md
+        else
+          gh release create "$TAG" dist/* --title "WC24ESP $TAG" --notes-file notes.md --verify-tag
+        fi

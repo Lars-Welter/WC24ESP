@@ -62,6 +62,21 @@ SP803E DATA (GPIO16) ─────────────────── D
 GND von Controller und Matrix müssen verbunden sein — bei getrennter
 Einspeisung also zusätzlich Masse durchverbinden.
 
+## Fertige Firmware herunterladen
+
+Unter [Releases](https://github.com/Lars-Welter/WC24ESP/releases/latest) liegt
+die fertig gebaute Firmware:
+
+* **`…-factory.bin`** — Erstinstallation per USB-C an Adresse `0x0`, z. B. im
+  Browser mit [esptool-js](https://espressif.github.io/esptool-js/) (Chrome oder
+  Edge: *Connect*, *Erase Flash*, Datei an `0x0`, *Program*). Ersetzt WLED.
+* **`…-update.bin`** — Update einer laufenden Uhr über
+  `http://<ip-der-uhr>/update`; Einstellungen bleiben erhalten.
+
+Ein neues Release entsteht automatisch, sobald ein Tag `v*` gepusht wird
+(`git tag v4.4.2 && git push origin v4.4.2`); den Build übernimmt
+`.github/workflows/release.yml`.
+
 ## Bauen und Flashen
 
 Voraussetzungen: [PlatformIO Core](https://docs.platformio.org/en/latest/core/installation/)
