@@ -166,8 +166,12 @@ bool Transition::isSpecialEvent(Transition_t &type, struct tm &tm,
 Transition_t Transition::getTransitionType(bool trigger) {
     if (G.transitionType == RANDOM) {
         if (trigger) {
-            return (Transition_t)random(transitionTypeFirst,
-                                        transitionTypeLast + 1);
+            Transition_t type;
+            do {
+                type = (Transition_t)random(transitionTypeFirst,
+                                            transitionTypeLast + 1);
+            } while (type == RANDOM || type == COLORED);
+            return type;
         } else {
             return transitionType;
         }
@@ -1118,6 +1122,336 @@ uint16_t Transition::transitionSnake() {
 }
 
 //------------------------------------------------------------------------------
+// Transitions ported from the WordClock24h firmware (src/display/display.c,
+// https://github.com/ukw100/wordclock24h, Copyright (c) 2014-2026 Frank Meyer,
+// GPL-2.0-or-later).
+//------------------------------------------------------------------------------
+// explode: the old letters fly outwards diagonally, the new ones grow from the
+// center to their place.
+
+uint16_t Transition::transitionExplode() {
+    const uint8_t frames = maxCols / 2;
+
+    if (phase == 1) {
+        transitionDelay = calcDelay(frames);
+    }
+
+    const uint8_t distance = frames - phase;
+    const uint8_t midRow = maxRows / 2;
+    const uint8_t midCol = maxCols / 2;
+
+    fillMatrix(work, background);
+
+    for (uint8_t row = 0; row < maxRows; row++) {
+        for (uint8_t col = 0; col < maxCols; col++) {
+            if (!old[row][col].isForeground()) {
+                continue;
+            }
+            const int16_t newRow = row < midRow ? row - phase : row + phase;
+            const int16_t newCol = col < midCol ? col - phase : col + phase;
+            if (newRow >= 0 && newRow < maxRows && newCol >= 0 &&
+                newCol < maxCols) {
+                work[newRow][newCol] = old[row][col];
+            }
+        }
+    }
+
+    for (uint8_t row = 0; row < maxRows; row++) {
+        for (uint8_t col = 0; col < maxCols; col++) {
+            if (!act[row][col].isForeground()) {
+                continue;
+            }
+            // Pull the letter towards the center, but not across it.
+            int16_t newRow = row < midRow ? row + distance : row - distance;
+            int16_t newCol = col < midCol ? col + distance : col - distance;
+            if (row < midRow && newRow > midRow - 1) {
+                newRow = midRow - 1;
+            } else if (row >= midRow && newRow < midRow) {
+                newRow = midRow;
+            }
+            if (col < midCol && newCol > midCol - 1) {
+                newCol = midCol - 1;
+            } else if (col >= midCol && newCol < midCol) {
+                newCol = midCol;
+            }
+            work[newRow][newCol] = act[row][col];
+        }
+    }
+
+    if (phase >= frames) {
+        copyMatrix(work, act);
+        return 0;
+    }
+    return phase + 1;
+}
+
+//------------------------------------------------------------------------------
+// teletype: clear the display, then type the new letters one by one in
+// reading order.
+
+uint16_t Transition::transitionTeletype() {
+    static uint16_t nextCell = 0;
+    const uint16_t cells = maxRows * maxCols;
+
+    if (phase == 1) {
+        uint16_t letters = 0;
+        for (uint8_t row = 0; row < maxRows; row++) {
+            for (uint8_t col = 0; col < maxCols; col++) {
+                letters += act[row][col].isForeground();
+            }
+        }
+        transitionDelay = calcDelay(letters + 1);
+        fillMatrix(work, background);
+        nextCell = 0;
+        return phase + 1;
+    }
+
+    while (nextCell < cells) {
+        const uint8_t row = nextCell / maxCols;
+        const uint8_t col = nextCell % maxCols;
+        nextCell++;
+        if (act[row][col].isForeground()) {
+            work[row][col] = act[row][col];
+            return phase + 1;
+        }
+    }
+
+    copyMatrix(work, act);
+    return 0;
+}
+
+//------------------------------------------------------------------------------
+
+void Transition::drawRing(RgbfColor **matrix, uint8_t ring, RgbfColor color) {
+    const uint8_t top = ring;
+    const uint8_t bottom = maxRows - 1 - ring;
+    const uint8_t left = ring;
+    const uint8_t right = maxCols - 1 - ring;
+
+    for (uint8_t col = left; col <= right; col++) {
+        matrix[top][col] = color;
+        matrix[bottom][col] = color;
+    }
+    for (uint8_t row = top + 1; row < bottom; row++) {
+        matrix[row][left] = color;
+        matrix[row][right] = color;
+    }
+}
+
+//------------------------------------------------------------------------------
+// cube: a frame shrinks from the border to the center and wipes the old
+// display, then the new one appears.
+
+uint16_t Transition::transitionCube() {
+    const uint8_t rings = min(maxRows, maxCols) / 2;
+
+    if (phase == 1) {
+        transitionDelay = calcDelay(rings + 2);
+        copyMatrix(work, old);
+    }
+
+    const uint8_t ring = phase - 1;
+
+    if (ring > rings) {
+        copyMatrix(work, act);
+        return 0;
+    }
+    if (ring < rings) {
+        drawRing(work, ring, foreground);
+    }
+    if (ring > 0) {
+        drawRing(work, ring - 1, background);
+    }
+    return phase + 1;
+}
+
+//------------------------------------------------------------------------------
+// drop: the old letters fall out of the display one after the other, then the
+// new letters drop in from the top. Letters shown before and after stay.
+
+uint16_t Transition::transitionDrop() {
+    static bool droppingOld;
+    static bool moving;
+    static uint8_t moveRow, moveCol, targetRow;
+    static RgbfColor covered;
+
+    if (phase == 1) {
+        uint16_t steps = 0;
+        for (uint8_t row = 0; row < maxRows; row++) {
+            for (uint8_t col = 0; col < maxCols; col++) {
+                const bool wasLit = old[row][col].isForeground();
+                const bool isLit = act[row][col].isForeground();
+                if (wasLit && !isLit) {
+                    steps += maxRows - row;
+                } else if (isLit && !wasLit) {
+                    steps += row + 1;
+                }
+            }
+        }
+        transitionDelay = calcDelay(steps + 1);
+        copyMatrix(work, old);
+        droppingOld = true;
+        moving = false;
+    }
+
+    if (droppingOld) {
+        // Move the lowest old letter one row down.
+        for (int16_t row = maxRows - 1; row >= 0; row--) {
+            for (uint8_t col = 0; col < maxCols; col++) {
+                if (!work[row][col].isForeground() ||
+                    act[row][col].isForeground()) {
+                    continue;
+                }
+                if (row + 1 < maxRows && !work[row + 1][col].isForeground()) {
+                    work[row + 1][col] = work[row][col];
+                }
+                work[row][col] = background;
+                return phase + 1;
+            }
+        }
+        droppingOld = false;
+    }
+
+    if (moving) {
+        // The falling letter only covers what it passes, it is not part of
+        // the matrix until it arrived.
+        work[moveRow][moveCol] = covered;
+        moveRow++;
+        covered = work[moveRow][moveCol];
+        work[moveRow][moveCol] = act[targetRow][moveCol];
+        if (moveRow == targetRow) {
+            moving = false;
+        } else {
+            work[moveRow][moveCol].setForeground(false);
+        }
+        return phase + 1;
+    }
+
+    // Start dropping the lowest new letter that is not in place yet.
+    for (int16_t row = maxRows - 1; row >= 0; row--) {
+        for (uint8_t col = 0; col < maxCols; col++) {
+            if (!act[row][col].isForeground() ||
+                work[row][col].isForeground()) {
+                continue;
+            }
+            if (row == 0) {
+                work[0][col] = act[0][col];
+                return phase + 1;
+            }
+            moving = true;
+            moveRow = 0;
+            moveCol = col;
+            targetRow = row;
+            covered = work[0][col];
+            work[0][col] = act[row][col];
+            work[0][col].setForeground(false);
+            return phase + 1;
+        }
+    }
+
+    copyMatrix(work, act);
+    return 0;
+}
+
+//------------------------------------------------------------------------------
+// squeeze: the old words shrink from the right, then the new words grow from
+// the left, one letter per step.
+
+uint16_t Transition::transitionSqueeze() {
+    static bool shrinking;
+
+    if (phase == 1) {
+        // One step per letter of the longest old and the longest new word.
+        uint8_t longestOld = 0, longestNew = 0;
+        for (uint8_t row = 0; row < maxRows; row++) {
+            uint8_t runOld = 0, runNew = 0;
+            for (uint8_t col = 0; col < maxCols; col++) {
+                runOld = old[row][col].isForeground() ? runOld + 1 : 0;
+                runNew = act[row][col].isForeground() ? runNew + 1 : 0;
+                longestOld = max(longestOld, runOld);
+                longestNew = max(longestNew, runNew);
+            }
+        }
+        transitionDelay = calcDelay(longestOld + longestNew + 1);
+        copyMatrix(work, old);
+        shrinking = true;
+    }
+
+    bool changed = false;
+
+    if (shrinking) {
+        for (uint8_t row = 0; row < maxRows; row++) {
+            for (int16_t col = maxCols - 1; col >= 0; col--) {
+                if (!work[row][col].isForeground()) {
+                    continue;
+                }
+                // Right end of a word: switch it off and skip the rest of it.
+                work[row][col] = background;
+                changed = true;
+                while (col > 0 && work[row][col - 1].isForeground()) {
+                    col--;
+                }
+            }
+        }
+        if (changed) {
+            return phase + 1;
+        }
+        shrinking = false;
+    }
+
+    for (uint8_t row = 0; row < maxRows; row++) {
+        for (uint8_t col = 0; col < maxCols; col++) {
+            if (!act[row][col].isForeground() ||
+                work[row][col].isForeground()) {
+                continue;
+            }
+            // Next letter of a word: switch it on and skip the rest of it.
+            work[row][col] = act[row][col];
+            changed = true;
+            while (col + 1 < maxCols && act[row][col + 1].isForeground()) {
+                col++;
+            }
+        }
+    }
+    if (changed) {
+        return phase + 1;
+    }
+
+    copyMatrix(work, act);
+    return 0;
+}
+
+//------------------------------------------------------------------------------
+// flicker: old and new letters flicker together before the new ones remain.
+
+uint16_t Transition::transitionFlicker() {
+    const uint8_t frames = 32;
+
+    if (phase == 1) {
+        transitionDelay = calcDelay(frames);
+    }
+
+    if (phase >= frames) {
+        copyMatrix(work, act);
+        return 0;
+    }
+
+    fillMatrix(work, background);
+    if (random(8) > 1) {
+        for (uint8_t row = 0; row < maxRows; row++) {
+            for (uint8_t col = 0; col < maxCols; col++) {
+                if (act[row][col].isForeground()) {
+                    work[row][col] = act[row][col];
+                } else if (old[row][col].isForeground()) {
+                    work[row][col] = old[row][col];
+                }
+            }
+        }
+    }
+    return phase + 1;
+}
+
+//------------------------------------------------------------------------------
 // Loop Helper Functions
 //------------------------------------------------------------------------------
 
@@ -1308,6 +1642,24 @@ void Transition::loop(struct tm &tm) {
                     break;
                 case SNAKE:
                     phase = transitionSnake();
+                    break;
+                case EXPLODE:
+                    phase = transitionExplode();
+                    break;
+                case TELETYPE:
+                    phase = transitionTeletype();
+                    break;
+                case CUBE:
+                    phase = transitionCube();
+                    break;
+                case DROP:
+                    phase = transitionDrop();
+                    break;
+                case SQUEEZE:
+                    phase = transitionSqueeze();
+                    break;
+                case FLICKER:
+                    phase = transitionFlicker();
                     break;
                 case COLORED:
                     copyMatrix(work, act);

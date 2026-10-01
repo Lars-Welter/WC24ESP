@@ -87,6 +87,12 @@ let TRANSLATION_DE_DE = {
 				"balls": "Bälle",
 				"firework": "Feuerwerk",
 				"snake": "Schlange",
+				"explode": "Explodieren",
+				"teletype": "Fernschreiber",
+				"cube": "Würfel",
+				"drop": "Herunterfallen",
+				"squeeze": "Quetschen",
+				"flicker": "Flackern",
 				"colored": "Bunt",
 				"random": "Zufällig"
 			},

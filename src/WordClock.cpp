@@ -301,7 +301,8 @@ void ensureWc24hSettings() {
         return;
     }
 
-    Serial.println("Invalid WordClock24h settings in EEPROM, restoring defaults");
+    Serial.println(
+        "Invalid WordClock24h settings in EEPROM, restoring defaults");
     setDefaultWc24hSettings();
     eeprom::write();
 }

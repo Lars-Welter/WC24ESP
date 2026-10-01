@@ -162,7 +162,8 @@ void ClockWork::nextHardwareButtonTransition() {
     static const uint8_t transitions[] = {
         NO_TRANSITION, ROLL_UP, ROLL_DOWN,   SHIFT_LEFT, SHIFT_RIGHT,
         FADE,          LASER,   MATRIX_RAIN, BALLS,      FIRE,
-        SNAKE,         COLORED, RANDOM};
+        SNAKE,         EXPLODE, TELETYPE,    CUBE,       DROP,
+        SQUEEZE,       FLICKER, COLORED,     RANDOM};
 
     uint8_t nextTransition = transitions[0];
     for (uint8_t i = 0; i < sizeof(transitions) / sizeof(transitions[0]); i++) {

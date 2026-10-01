@@ -30,7 +30,8 @@ std::string toText(const wc24h::WordSet &words) {
         if (!text.empty()) {
             text += ' ';
         }
-        text.append(LETTERS[w.row] + w.col, w.len & wc24h::ILLUMINATION_LEN_MASK);
+        text.append(LETTERS[w.row] + w.col,
+                    w.len & wc24h::ILLUMINATION_LEN_MASK);
     }
     return text;
 }
@@ -53,8 +54,9 @@ void expectTemperature(uint8_t index, bool valid, const char *expected) {
     const bool ok = wc24h::fillTemperatureWords(index, words);
     const std::string actual = toText(words);
     if (ok != valid || actual != expected) {
-        printf("FAIL temperature index %u\n  expected: %d %s\n  actual:   %d %s\n",
-               index, valid, expected, ok, actual.c_str());
+        printf(
+            "FAIL temperature index %u\n  expected: %d %s\n  actual:   %d %s\n",
+            index, valid, expected, ok, actual.c_str());
         failures++;
     }
 }
@@ -66,8 +68,7 @@ void expectNight(bool actual, bool expected, const char *what) {
     }
 }
 
-uint8_t nightFlags(bool active, bool switchOn, uint8_t fromDay,
-                   uint8_t toDay) {
+uint8_t nightFlags(bool active, bool switchOn, uint8_t fromDay, uint8_t toDay) {
     return (active ? wc24h::NIGHT_FLAG_ACTIVE : 0) |
            (switchOn ? wc24h::NIGHT_FLAG_SWITCH_ON : 0) | (fromDay << 3) |
            toDay;
@@ -106,8 +107,8 @@ void testNightTimers() {
                 "wrong minute");
     expectNight(nightTimerFires(workdays, 22, 30, true, 6, 22, 30), false,
                 "wrong weekday");
-    expectNight(nightTimerFires(nightFlags(false, false, 1, 5), 22, 30, true,
-                                2, 22, 30),
+    expectNight(nightTimerFires(nightFlags(false, false, 1, 5), 22, 30, true, 2,
+                                22, 30),
                 false, "inactive timer");
     expectNight(nightTimerFires(sunday, 7, 0, false, 0, 7, 0), true,
                 "switch on when off");

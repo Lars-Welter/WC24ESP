@@ -99,6 +99,13 @@ enum Transition_t {
     FIRE = 9,
     SNAKE = 10,
     COLORED = 12,
+    // ported from the WordClock24h firmware
+    EXPLODE = 13,
+    TELETYPE = 14,
+    CUBE = 15,
+    DROP = 16,
+    SQUEEZE = 17,
+    FLICKER = 18,
     // only internaly used
     RANDOM = 11,
 
@@ -119,7 +126,7 @@ class Transition {
 
 public:
     static const Transition_t transitionTypeFirst = ROLL_UP;
-    static const Transition_t transitionTypeLast = SNAKE;
+    static const Transition_t transitionTypeLast = FLICKER;
 
 protected:
     uint16_t phase = 0;
@@ -199,6 +206,13 @@ protected:
     uint16_t transitionCountdown(struct tm &tm);
     uint16_t transitionMatrixRain();
     uint16_t transitionSnake();
+    uint16_t transitionExplode();
+    uint16_t transitionTeletype();
+    uint16_t transitionCube();
+    uint16_t transitionDrop();
+    uint16_t transitionSqueeze();
+    uint16_t transitionFlicker();
+    void drawRing(RgbfColor **matrix, uint8_t ring, RgbfColor color);
 
 public:
     Transition(uint8_t bottomRightRow, uint8_t bottomRightCol);

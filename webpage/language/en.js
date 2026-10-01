@@ -87,6 +87,12 @@ let TRANSLATION_EN_US = {
 				"balls": "Balls",
 				"firework": "Firework",
 				"snake": "Snake",
+				"explode": "Explode",
+				"teletype": "Teletype",
+				"cube": "Cube",
+				"drop": "Drop",
+				"squeeze": "Squeeze",
+				"flicker": "Flicker",
 				"colored": "Colored",
 				"random": "Random"
 			},

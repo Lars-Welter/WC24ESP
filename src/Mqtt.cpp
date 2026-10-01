@@ -118,7 +118,9 @@ struct LabeledValue {
 static const LabeledValue TRANSITION_TYPES[] = {
     {"Off", 0},         {"Roll Up", 1}, {"Roll Down", 2}, {"Shift Left", 3},
     {"Shift Right", 4}, {"Fade", 5},    {"Laser", 6},     {"Matrix Rain", 7},
-    {"Balls", 8},       {"Fire", 9},    {"Snake", 10},    {"Random", 11}};
+    {"Balls", 8},       {"Fire", 9},    {"Snake", 10},    {"Explode", 13},
+    {"Teletype", 14},   {"Cube", 15},   {"Drop", 16},     {"Squeeze", 17},
+    {"Flicker", 18},    {"Random", 11}};
 
 static const LabeledValue TRANSITION_COLORIZE[] = {
     {"Off", 0}, {"Words", 1}, {"Characters", 2}};
