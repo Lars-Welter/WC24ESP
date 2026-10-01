@@ -278,18 +278,39 @@ void ensureHardwarePins() {
 
 //------------------------------------------------------------------------------
 
+wc24h::Overlay makeOverlay(uint8_t type, uint8_t interval, uint8_t dateCode,
+                           uint8_t month, uint8_t day, uint8_t days,
+                           uint8_t icon, const char *text) {
+    wc24h::Overlay overlay = {};
+    overlay.type = type;
+    overlay.interval = interval;
+    overlay.duration = 10;
+    overlay.dateCode = dateCode;
+    overlay.month = month;
+    overlay.day = day;
+    overlay.days = days;
+    overlay.icon = icon;
+    strlcpy(overlay.text, text, sizeof(overlay.text));
+    return overlay;
+}
+
+//------------------------------------------------------------------------------
+
 void setDefaultOverlays() {
     using namespace wc24h;
     memset(G.overlays, 0, sizeof(G.overlays));
-    // Typical overlays of the WordClock24h firmware, switched off.
-    G.overlays[0] = {OVERLAY_DATE, 0, 30, 10, DATE_ALWAYS, 0, 0, 0, 0, ""};
-    G.overlays[1] = {
-        OVERLAY_TEMPERATURE, 0, 10, 10, DATE_ALWAYS, 0, 0, 0, 0, ""};
-    G.overlays[2] = {OVERLAY_ICON, 0, 15, 10, DATE_FIXED, 2, 14, 1, 0, ""};
-    G.overlays[3] = {OVERLAY_ICON, 0, 15, 10, DATE_ADVENT1, 0, 0, 30, 1, ""};
-    G.overlays[4] = {OVERLAY_ICON, 0, 5, 10, DATE_FIXED, 12, 31, 2, 2, ""};
-    G.overlays[5] = {OVERLAY_TICKER, 0, 60, 10, DATE_ALWAYS, 0, 0, 0, 0,
-                     "WORDCLOCK 24H"};
+    // Typical overlays of the WordClock24h firmware, switched off: date,
+    // temperature, heart on Valentine's Day, Christmas tree from the first
+    // Advent, fireworks on New Year's Eve and a ticker.
+    G.overlays[0] = makeOverlay(OVERLAY_DATE, 30, DATE_ALWAYS, 0, 0, 0, 0, "");
+    G.overlays[1] =
+        makeOverlay(OVERLAY_TEMPERATURE, 10, DATE_ALWAYS, 0, 0, 0, 0, "");
+    G.overlays[2] = makeOverlay(OVERLAY_ICON, 15, DATE_FIXED, 2, 14, 1, 0, "");
+    G.overlays[3] =
+        makeOverlay(OVERLAY_ICON, 15, DATE_ADVENT1, 0, 0, 30, 1, "");
+    G.overlays[4] = makeOverlay(OVERLAY_ICON, 5, DATE_FIXED, 12, 31, 2, 2, "");
+    G.overlays[5] = makeOverlay(OVERLAY_TICKER, 60, DATE_ALWAYS, 0, 0, 0, 0,
+                                "WORDCLOCK 24H");
 }
 
 //------------------------------------------------------------------------------

@@ -1608,7 +1608,7 @@ struct OverlayState {
     uint32_t lastFrameMillis = 0;
     uint32_t durationMs = 0;
     bool ticker = false;
-    char text[32] = "";
+    char text[32] = {};
 } overlayState;
 
 constexpr uint32_t OVERLAY_ICON_FADE_MS = 2000;
