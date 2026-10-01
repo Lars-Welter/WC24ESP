@@ -1472,13 +1472,23 @@ bool ClockWork::readTemperature(float &celsius) {
 
 //------------------------------------------------------------------------------
 
-bool ClockWork::readTemperatureIndex(uint8_t &temperatureIndex) {
-    float celsius;
-    if (!readTemperature(celsius) || celsius < 0.f || celsius > 127.f) {
+namespace {
+// Temperature in half degrees, as used by the WordClock24h tables.
+bool toTemperatureIndex(float celsius, uint8_t &temperatureIndex) {
+    if (celsius < 0.f || celsius > 127.f) {
         return false;
     }
     temperatureIndex = static_cast<uint8_t>(lroundf(celsius * 2.f));
     return true;
+}
+} // namespace
+
+//------------------------------------------------------------------------------
+
+bool ClockWork::readTemperatureIndex(uint8_t &temperatureIndex) {
+    float celsius;
+    return readTemperature(celsius) &&
+           toTemperatureIndex(celsius, temperatureIndex);
 }
 
 //------------------------------------------------------------------------------
@@ -1608,6 +1618,7 @@ struct OverlayState {
     uint32_t lastFrameMillis = 0;
     uint32_t durationMs = 0;
     bool ticker = false;
+    float celsius = 0.f;
     char text[32] = {};
 } overlayState;
 
@@ -1682,21 +1693,17 @@ bool ClockWork::beginOverlay(const wc24h::Overlay &overlay,
 
     case wc24h::OVERLAY_TEMPERATURE:
     case wc24h::OVERLAY_TEMPERATURE_DIGITS: {
-        float celsius;
-        if (!readTemperature(celsius)) {
+        if (!readTemperature(overlayState.celsius)) {
             return false;
         }
         uint8_t index;
         wc24h::WordSet words;
         if (overlay.type == wc24h::OVERLAY_TEMPERATURE &&
-            readTemperatureIndex(index) &&
-            wc24h::fillTemperatureWords(index, words)) {
-            return true;
-        }
-        if (overlay.type == wc24h::OVERLAY_TEMPERATURE) {
+            !(toTemperatureIndex(overlayState.celsius, index) &&
+              wc24h::fillTemperatureWords(index, words))) {
             // Outside of what the words can say: scroll it instead.
             snprintf(overlayState.text, sizeof(overlayState.text), "%d GRAD",
-                     static_cast<int>(lroundf(celsius)));
+                     static_cast<int>(lroundf(overlayState.celsius)));
             overlayState.ticker = true;
         }
         return true;
@@ -1833,17 +1840,15 @@ void ClockWork::loopOverlay() {
         return;
     }
 
-    float celsius;
     uint8_t index;
     wc24h::WordSet words;
     if (overlayState.overlay->type == wc24h::OVERLAY_TEMPERATURE &&
-        readTemperatureIndex(index) &&
+        toTemperatureIndex(overlayState.celsius, index) &&
         wc24h::fillTemperatureWords(index, words)) {
         showOverlayWords(words);
     } else if (overlayState.overlay->type ==
-                   wc24h::OVERLAY_TEMPERATURE_DIGITS &&
-               readTemperature(celsius)) {
-        const int value = static_cast<int>(lroundf(celsius));
+               wc24h::OVERLAY_TEMPERATURE_DIGITS) {
+        const int value = static_cast<int>(lroundf(overlayState.celsius));
         char digits[4];
         snprintf(digits, sizeof(digits), "%2d",
                  value < -9 ? -9 : (value > 99 ? 99 : value));
