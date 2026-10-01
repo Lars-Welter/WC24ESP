@@ -73,7 +73,8 @@ die fertig gebaute Firmware:
 * **`…-update.bin`** — Update einer laufenden Uhr über
   `http://<ip-der-uhr>/update`; Einstellungen bleiben erhalten.
 
-Ein neues Release entsteht automatisch, sobald ein Tag `v*` gepusht wird
+Ein neues Release entsteht automatisch, sobald auf GitHub ein Release
+veröffentlicht oder ein Tag `v*` gepusht wird
 (`git tag v4.4.2 && git push origin v4.4.2`); den Build übernimmt
 `.github/workflows/release.yml`.
 

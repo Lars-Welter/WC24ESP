@@ -1,11 +1,14 @@
 name: Release
 
-# Builds the firmware and publishes it as a GitHub release.
-# Triggered by pushing a tag like `v4.4.1`, or manually for an existing tag.
+# Builds the firmware and attaches it to a GitHub release.
+# Triggered by pushing a tag like `v4.4.1`, by publishing a release in the
+# GitHub web interface, or manually for an existing tag.
 
 on:
   push:
     tags: ["v*"]
+  release:
+    types: [published]
   workflow_dispatch:
     inputs:
       tag:
@@ -14,6 +17,9 @@ on:
 
 permissions:
   contents: write
+
+concurrency:
+  group: release-${{ github.event.inputs.tag || github.ref_name }}
 
 jobs:
   release:
