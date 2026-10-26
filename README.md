@@ -165,6 +165,7 @@ folgende Werte gesetzt:
 | `DEFAULT_BRIGHTNESS` | 60 | Strombedarf von 288 LEDs |
 | `SERNR` | 2442 | erzwingt saubere EEPROM-Initialisierung |
 | `DEFAULT_WC24H_DISPLAY_MODE` | 13 | „Rhein/Ruhr (12)" der WordClock24h |
+| `STATUS_LED_COUNT` | 1 | Status-LED unter der Matrix sitzt in der Original-Verdrahtung vor dem ersten Buchstaben; bei einer Kette ohne Status-LED auf 0 setzen |
 | PlatformIO-Env | `SP803E` (esp32dev) | einzige Zielhardware |
 | Partitionierung | `min_spiffs.csv` | Platz für Firmware inkl. Weboberfläche |
 
