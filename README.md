@@ -13,6 +13,16 @@ sie ohne zusätzliche Hardware auf dem SP803E laufen: alle 27 Anzeigemodi,
 Nachtschaltung, Einblendungen (Overlays), die Animationen und die
 Tageslicht-Farbe — siehe [Funktionen der WordClock24h](#funktionen-der-wordclock24h).
 
+## Dokumentation
+
+| Dokument | Inhalt |
+| --- | --- |
+| [docs/Funktionen.md](docs/Funktionen.md) | Bedienung: Startseite, Spiele, Timer, Nachrichten, Stimmungen, Wecker, Einblendungen, Digitaluhr |
+| [docs/Home-Assistant.md](docs/Home-Assistant.md) | MQTT einrichten, Entitäten, Hinweise wie „Waschmaschine fertig" mit fertigen Automationen |
+| [docs/Umbau-WordClock24h.md](docs/Umbau-WordClock24h.md) | Original-WordClock24h (Nucleo + Trägerplatine V2.1a) auf den SP803E umrüsten, Messpunkte, Fehlersuche |
+| [docs/Protokoll.md](docs/Protokoll.md) | für Entwickler: Quellcode-Überblick, WebSocket-Befehle, JSON-Nachrichten, Spiel- und Tastennummern |
+| [CHANGELOG.md](CHANGELOG.md) | Änderungen dieser Variante |
+
 ## Was die Uhr anzeigt
 
 Das 24h-Layout zeigt die Zeit minutengenau und ohne AM/PM aus, z. B.:
@@ -74,6 +84,9 @@ SP803E DATA (GPIO16) ─────────────────── D
 
 GND von Controller und Matrix müssen verbunden sein — bei getrennter
 Einspeisung also zusätzlich Masse durchverbinden.
+
+**Umbau einer fertigen WordClock24h** (Nucleo, Trägerplatine, Original-Netzteil):
+siehe [docs/Umbau-WordClock24h.md](docs/Umbau-WordClock24h.md).
 
 ## Bauen und Flashen
 
@@ -154,59 +167,24 @@ Hinweise zur Portierung:
 
 ## Zusätzliche Funktionen
 
-Die Weboberfläche startet mit einer **Startseite**: Live-Vorschau der
-Buchstaben (zeigt, was gerade auf der Uhr leuchtet), Statuszeile (Modus, WLAN,
-Anzeige an/aus), Schnellzugriff, *Nachricht an die Uhr* und *Stimmung*. Auf dem
-Handy gibt es eine Navigationsleiste unten. Unter *Einstellungen →
-Darstellung* lassen sich der Dunkelmodus wählen und technische Einstellungen
-(LED-Typ, Pins, Zeitserver, Hostname, MQTT …) per *Experteneinstellungen*
-ein- und ausblenden. `http://<Uhr>/#games` bzw. `#extras` öffnet eine Seite
-direkt; über „Zum Startbildschirm hinzufügen" liegt die Weboberfläche auf dem
-Handy wie eine App.
+Ausführlich in [docs/Funktionen.md](docs/Funktionen.md); kurz:
 
-**Spiele & Timer** — gespielt wird auf der Buchstabenmatrix, gesteuert vom
-Handy (Steuerkreuz, Farbtasten, Tastatur …) oder am PC mit den Pfeiltasten:
-
-| Gruppe | Spiele |
-| --- | --- |
-| Action | Tetris, Snake, Flappy Vogel, Breakout, Weltraum-Invasion, Frosch über die Straße, Farben merken (Simon) |
-| Zu zweit | Pong (zwei Handys oder gegen die Uhr), Vier gewinnt (zu zweit oder gegen die Uhr), Reaktionsduell |
-| Rätseln & Lernen | Galgenmännchen (geratene Buchstaben leuchten auf der Uhr), Uhrzeit-Quiz (Uhrzeit in Worten lesen, an einer Analoguhr einstellen), Wörter finden (Buchstaben in der Vorschau antippen), Kopfrechnen |
-| Kreativ | Malbrett — was in der Vorschau gemalt wird, erscheint auf der Uhr |
-
-Für Zwei-Spieler-Spiele wählt jedes Handy oben „Spieler 1" oder „Spieler 2".
-Einzelspiele haben eine **Bestenliste** (fünf Plätze je Spiel, im Flash des
-ESP32 gespeichert, Name aus der App). Treffer und Spielende vibrieren auf dem
-Handy. Dazu **Countdown** (bis 99:59, blinkt am Ende) und **Stoppuhr**.
-
-**Wecker & Extras**
-
-* **Wecker**: vier Weckzeiten mit Wochentagen; die Uhr weckt mit Licht
-  (Sonnenaufgang über 3 Minuten, Blinken, Feuerwerk, Lavalampe, Kaminfeuer,
-  Sternenhimmel). Der Taster am SP803E oder „Wecker aus" in der App beendet es,
-  sonst nach 5 Minuten.
-* **Nachricht an die Uhr**: Text vom Handy als Laufschrift, 1–5 Durchläufe,
-  mit Schnelltasten wie „Essen ist fertig".
-* **Stimmung**: Lavalampe, Kaminfeuer, Schneefall, Feuerwerk, Sternenhimmel,
-  Regen — bleibt an, bis ein anderer Modus gewählt wird.
-* **Lern-Farben**: die Stundenwörter in einer zweiten Farbe.
-* **Silvester**: auf Wunsch Feuerwerk um 0:00 Uhr am 1. Januar.
-* **Einblendungen** (*Anzeigeoptionen → WordClock24h*): zusätzlich
-  „Tage bis …" (z. B. `NOCH 12 TAGE: FERIEN`, `MORGEN: …`, `HEUTE: …`) und
-  die aktuelle **Mondphase** als Symbol.
-* **Hinweise aus Home Assistant** per MQTT an `<Topic>/cmd`:
-  `{"notify_text": "WASCHMASCHINE FERTIG"}` als Laufschrift oder
-  `{"notify_icon": 0}` für eines der Symbole (0 = Herz … 7).
-
-**Digitaluhr** (*Anzeigeoptionen → Digitaluhr*): Doppelpunkt blinkend,
-dauerhaft oder aus, 12-/24-Stunden-Anzeige, führende Null abschaltbar,
-Sekundenbalken zwischen den Ziffernzeilen, Ziffern zentriert statt versetzt.
-
-**Boot** (*Anzeigeoptionen → Boot*): Geschwindigkeit 1–10 für das Aufblitzen
-und den LED-Durchlauf beim Start (6 entspricht dem bisherigen Tempo).
-
-Spiele, Timer, Nachrichten, Stimmungen und der Wecker sind vorübergehend: nach
-einem Neustart zeigt die Uhr wieder die Uhrzeit.
+* **Startseite** mit Live-Vorschau der Buchstaben, Statuszeile,
+  Schnellzugriff, *Nachricht an die Uhr* und *Stimmungen* (Lavalampe,
+  Kaminfeuer, Schnee, Feuerwerk, Sternenhimmel, Regen). Auf dem Handy als App
+  über „Zum Startbildschirm hinzufügen", mit Navigationsleiste unten,
+  Dunkelmodus und ausblendbaren Experteneinstellungen.
+* **17 Spiele** auf der Buchstabenmatrix, gesteuert vom Handy: Tetris, Snake,
+  Flappy Vogel, Breakout, Weltraum-Invasion, Frosch über die Straße, Farben
+  merken, Pong und Vier gewinnt (zu zweit oder gegen die Uhr),
+  Reaktionsduell, Galgenmännchen, Uhrzeit-Quiz, Wörter finden, Kopfrechnen,
+  Malbrett — mit Bestenliste. Dazu **Countdown** und **Stoppuhr**.
+* **Lichtwecker** (vier Weckzeiten, z. B. Sonnenaufgang), **Lern-Farben**
+  für die Stundenwörter, **Silvester-Feuerwerk**, Einblendungen **„Tage bis
+  …"** und **Mondphase**.
+* **Home Assistant**: Hinweise wie „Waschmaschine fertig" mit Symbol — siehe
+  [docs/Home-Assistant.md](docs/Home-Assistant.md).
+* **Digitaluhr**-Optionen und einstellbare **Boot-Geschwindigkeit**.
 
 ## Voreinstellungen dieser Variante
 
@@ -241,6 +219,9 @@ Ebenso die Farbreihenfolge des Strips (`DEFAULT_LEDTYPE`, Standard `Grb`).
   in der Weboberfläche steuern.
 * **Taster `KEY` liegt auf GPIO 0**, dem Boot-Strapping-Pin. Beim Einschalten
   und beim Flashen darf er nicht gedrückt sein.
+* **Datenleitung mit 3,3 V**: Der ESP32 treibt die LEDs über I2S mit DMA,
+  damit WLAN die lange Kette nicht stört. Bei LEDs, die 3,3 V schlecht
+  vertragen, hilft ein Pull-up von 1,8–2,2 kΩ von der Datenleitung nach 5 V.
 * **Mikrofon und PWM-Ausgänge werden nicht verwendet** — musikreaktive Effekte
   und Einfarb-/CCT-Strips sind eine WLED-Funktion, keine der Wordclock-Firmware.
 
