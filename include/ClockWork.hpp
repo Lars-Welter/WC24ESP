@@ -2000,20 +2000,18 @@ void drawTetris() {
     const HsbColor off(0.f, 0.f, 0.f);
     for (uint8_t row = 0; row < wc24h::GAME_ROWS; row++) {
         for (uint8_t col = 0; col < wc24h::GAME_COLS; col++) {
-            // The front matrix counts columns from the right.
-            const uint8_t ledCol = wc24h::GAME_COLS - 1 - col;
             if (col == wc24h::TETRIS_OFFSET - 1 ||
                 col == wc24h::TETRIS_OFFSET + wc24h::TETRIS_COLS) {
-                led.setPixel(row, ledCol, wall);
+                led.setPixel(row, col, wall);
                 continue;
             }
             if (col < wc24h::TETRIS_OFFSET ||
                 col >= wc24h::TETRIS_OFFSET + wc24h::TETRIS_COLS) {
-                led.setPixel(row, ledCol, off);
+                led.setPixel(row, col, off);
                 continue;
             }
             const uint8_t cell = tetris.cell(row, col - wc24h::TETRIS_OFFSET);
-            led.setPixel(row, ledCol,
+            led.setPixel(row, col,
                          cell ? HsbColor(TETRIS_HUES[cell - 1], 1.f, bri)
                               : off);
         }
@@ -2026,20 +2024,18 @@ void drawSnake() {
     const HsbColor off(0.f, 0.f, 0.f);
     for (uint8_t row = 0; row < wc24h::GAME_ROWS; row++) {
         for (uint8_t col = 0; col < wc24h::GAME_COLS; col++) {
-            led.setPixel(row, wc24h::GAME_COLS - 1 - col, off);
+            led.setPixel(row, col, off);
         }
     }
     const uint16_t food = snake.food;
-    led.setPixel(food / wc24h::GAME_COLS,
-                 wc24h::GAME_COLS - 1 - food % wc24h::GAME_COLS,
+    led.setPixel(food / wc24h::GAME_COLS, food % wc24h::GAME_COLS,
                  HsbColor(0.f, 1.f, bri));
     for (uint16_t i = snake.length; i-- > 0;) {
         const uint16_t c = snake.segment(i);
         // Bright head, body fading slightly towards the tail.
         const HsbColor color = i == 0 ? HsbColor(0.25f, 1.f, bri)
                                       : HsbColor(0.33f, 1.f, bri * 0.6f);
-        led.setPixel(c / wc24h::GAME_COLS,
-                     wc24h::GAME_COLS - 1 - c % wc24h::GAME_COLS, color);
+        led.setPixel(c / wc24h::GAME_COLS, c % wc24h::GAME_COLS, color);
     }
     led.show();
 }
