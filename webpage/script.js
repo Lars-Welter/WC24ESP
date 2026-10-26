@@ -294,10 +294,66 @@ if (swatchGrid) {
 	});
 }
 
+/*
+ * iOS freezes a home-screen app in the background without closing its
+ * WebSocket. The clock only has a few connection slots, so the page closes
+ * its connection when hidden and reconnects by itself when shown again or
+ * after the connection dropped.
+ */
+let reconnectTimer = null;
+let reconnectDelay = 1000;
+let manualDisconnect = false;
+
+function scheduleReconnect() {
+	if (manualDisconnect || reconnectTimer || document.visibilityState !== "visible") {
+		return;
+	}
+	reconnectTimer = setTimeout(() => {
+		reconnectTimer = null;
+		initWebsocket();
+	}, reconnectDelay);
+	reconnectDelay = Math.min(reconnectDelay * 2, 10000);
+}
+
+function ensureWebsocket() {
+	if (manualDisconnect || document.visibilityState !== "visible") {
+		return;
+	}
+	if (!websocket || websocket.readyState === WebSocket.CLOSED || websocket.readyState === WebSocket.CLOSING) {
+		reconnectDelay = 1000;
+		initWebsocket();
+	}
+}
+
+function initAutoReconnect() {
+	document.addEventListener("visibilitychange", () => {
+		if (document.visibilityState === "hidden") {
+			if (websocket && websocket.readyState <= WebSocket.OPEN) {
+				websocket.close();
+			}
+		} else {
+			ensureWebsocket();
+		}
+	});
+	window.addEventListener("pageshow", ensureWebsocket);
+	window.addEventListener("focus", ensureWebsocket);
+	window.addEventListener("online", ensureWebsocket);
+}
+
 function initWebsocket() {
-	websocket = new WebSocket(ipEsp);
+	if (reconnectTimer) {
+		clearTimeout(reconnectTimer);
+		reconnectTimer = null;
+	}
+	if (websocket && websocket.readyState <= WebSocket.OPEN) {
+		websocket.close();
+	}
+	const socket = new WebSocket(ipEsp);
+	websocket = socket;
+	frameWaiting = false;
 
 	websocket.onopen = function(event) {
+		reconnectDelay = 1000;
 
 		const statusEl = document.getElementById("status");
 		if (statusEl) {
@@ -322,6 +378,9 @@ function initWebsocket() {
 	};
 
 	websocket.onclose = function(event) {
+		if (socket !== websocket) {
+			return;
+		}
 
 		const statusEl = document.getElementById("status");
 		if (statusEl) {
@@ -341,6 +400,7 @@ function initWebsocket() {
 		autoBrightStop();
 
 		debugMessage(`The connection with the websocket was closed (code ${event.code}).`, event);
+		scheduleReconnect();
 	};
 
 	websocket.onmessage = function(event) {
@@ -1039,6 +1099,7 @@ document.addEventListener("DOMContentLoaded", function() {
 	setSliders();
 	setElementsForFunctionsMenu();
 	initWebsocket();
+	initAutoReconnect();
 	setColors();
 
 	document.querySelectorAll("input[name='colorwheel']").forEach(input => {
@@ -1065,10 +1126,13 @@ document.addEventListener("DOMContentLoaded", function() {
 			if (value === "1") {
 				value = 0;
 				document.querySelectorAll(".status-button").forEach(btn => { btn.value = value; });
+				manualDisconnect = true;
 				if (websocket) websocket.close();
 			} else {
 				value = 1;
 				document.querySelectorAll(".status-button").forEach(btn => { btn.value = value; });
+				manualDisconnect = false;
+				reconnectDelay = 1000;
 				initWebsocket();
 			}
 		});
@@ -1687,9 +1751,9 @@ const GAMES = new Map([
 	[12, { key: "reaction", controls: "reaction", twoPlayer: true, hint: "games.hint-reaction" }],
 	[13, { key: "hangman", controls: "keyboard", hint: "games.hint-hangman" }],
 	[14, { key: "clock-quiz", controls: "quiz", hint: "games.hint-clock-quiz" }],
-	[15, { key: "word-find", controls: "tap", hint: "games.hint-word-find" }],
+	[15, { key: "word-find", controls: "tap", preview: true, hint: "games.hint-word-find" }],
 	[16, { key: "math", controls: "math", hint: "games.hint-math" }],
-	[20, { key: "paint", controls: "paint", hint: "games.hint-paint" }]
+	[20, { key: "paint", controls: "paint", preview: true, hint: "games.hint-paint" }]
 ]);
 const HIGHSCORE_GAMES = new Set([1, 2, 3, 4, 5, 6, 7, 13, 14, 15, 16]);
 const PROG_NAMES = new Map([[0, "mode.wordclock"], [1, "mode.wordclock"], [2, "functions.mode.seconds"],
@@ -1835,7 +1899,13 @@ function startFramePolling() {
 		if (document.visibilityState !== "visible" || !websocket || websocket.readyState !== WebSocket.OPEN) {
 			return;
 		}
-		const fast = isSectionVisible("home") || (isSectionVisible("games") && currentGame);
+		const game = isSectionVisible("games") && currentGame ? GAMES.get(currentGame) : null;
+		if (game && !game.preview) {
+			// Action games: the clock itself is the screen. Every frame
+			// request costs the clock time it needs to move the game smoothly.
+			return;
+		}
+		const fast = isSectionVisible("home") || Boolean(game);
 		const now = Date.now();
 		if (fast || now - lastSlow > 5000) {
 			lastSlow = now;

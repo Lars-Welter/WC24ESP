@@ -16,6 +16,11 @@ sie wie eine App im Vollbild. Direkt auf eine Seite springen:
 | `http://<Uhr>/#games` | Spiele & Timer |
 | `http://<Uhr>/#extras` | Wecker & Extras |
 
+Die Seite verbindet sich selbst neu, wenn man aus einer anderen App
+zurückkommt. Zeigt sie nach einem Firmware-Update noch die alte Oberfläche:
+die App ganz schließen (vom unteren Rand nach oben wischen und die App
+wegwischen) und neu öffnen.
+
 Auf dem Handy gibt es unten eine Leiste mit Start, Spiele, Farben, Wecker und
 Mehr; das vollständige Menü öffnet sich über ☰ oben links.
 

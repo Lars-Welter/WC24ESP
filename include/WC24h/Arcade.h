@@ -581,7 +581,11 @@ public:
             changed |= before != y16 / 16;
         }
         if (now - lastScroll >= scrollMs()) {
-            lastScroll = now;
+            // keep a steady rhythm even if the main loop was late once
+            lastScroll += scrollMs();
+            if (now - lastScroll >= scrollMs()) {
+                lastScroll = now;
+            }
             for (uint8_t i = 0; i < pipeCount; i++) {
                 pipes[i].col--;
                 if (!pipes[i].passed && pipes[i].col < BIRD_COL) {

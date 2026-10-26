@@ -3,6 +3,22 @@
 Alle Änderungen dieser SP803E-Variante gegenüber der
 [Multilayout-ESP-Wordclock](https://github.com/ESPWortuhr/Multilayout-ESP-Wordclock) 4.4.1.
 
+## Verbindung und flüssigere Spiele
+
+* Korrektur: Die Weboberfläche ließ sich nach einiger Zeit nicht mehr öffnen
+  und aktualisierte sich auf dem iPhone nicht. iOS friert eine App vom
+  Startbildschirm im Hintergrund ein, ohne die Verbindung zu schließen; die
+  Uhr hatte nur fünf Plätze und gab sie nie frei. Jetzt prüft die Uhr alle
+  drei Sekunden per Ping, ob ein Handy noch antwortet, und trennt tote
+  Verbindungen nach etwa vier Sekunden. Acht statt fünf Plätze.
+* Die Weboberfläche schließt ihre Verbindung, wenn sie in den Hintergrund
+  geht, und verbindet sich beim Zurückkehren oder nach einem Abbruch selbst
+  neu.
+* Spiele ruckeln weniger: Bei Actionspielen fragt die Seite kein Live-Bild
+  mehr ab (die Uhr ist der Bildschirm), und Nachrichten an tote Verbindungen
+  halten die Hauptschleife nicht mehr auf. Flappy Vogel scrollt in festem
+  Takt.
+
 ## Wordclock24, Malbrett, Korrekturen
 
 * Name in Weboberfläche, App-Symbol und Home Assistant (Gerätemodell):

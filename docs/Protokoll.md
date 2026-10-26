@@ -40,6 +40,10 @@ g++ -std=gnu++11 -Wall -Wextra -Werror -Iinclude test/wc24h_test.cpp -o wc24h_te
 ## WebSocket
 
 Die Weboberfläche spricht über einen WebSocket auf Port 80 mit der Uhr.
+Die Uhr hat acht Verbindungsplätze (`WEBSOCKETS_SERVER_CLIENT_MAX` in
+`platformio.ini`) und schickt alle drei Sekunden einen Ping; wer zweimal
+nicht antwortet, wird getrennt. Die Seite schließt ihre Verbindung, wenn sie
+unsichtbar wird, und verbindet sich danach selbst neu.
 Befehle sind Text: drei Ziffern Befehlsnummer, danach feste Felder (Zahlen
 dreistellig mit führenden Nullen, Texte mit Leerzeichen aufgefüllt).
 

@@ -749,6 +749,10 @@ void setup() {
 #endif
     webSocket.begin();
     webSocket.onEvent(webSocketEvent);
+    // Phones that went to sleep (iOS home-screen apps) never close their
+    // connection. Without a ping they keep a slot forever and every
+    // broadcast to them blocks the main loop until the TCP timeout.
+    webSocket.enableHeartbeat(3000, 2000, 2);
 
     Serial.println("Websocket started");
 
