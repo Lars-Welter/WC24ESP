@@ -46,6 +46,14 @@ public:
 
     //------------------------------------------------------------------------------
 
+    // The WordClock24h chain starts with one status LED below the matrix
+    // before the first letter, so every letter sits one LED further down.
+    virtual uint16_t getFrontMatrixIndex(uint8_t row, uint8_t col) override {
+        return ClockType::getFrontMatrixIndex(row, col) + STATUS_LED_COUNT;
+    };
+
+    //------------------------------------------------------------------------------
+
     virtual bool hasDreiviertel() override { return true; }
 
     //------------------------------------------------------------------------------

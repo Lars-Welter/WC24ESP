@@ -444,6 +444,10 @@
 // #define MINUTE_LED4x
 // #define MINUTE_LED7x
 
+// The original WordClock24h wiring puts one status LED (centered below the
+// matrix) first in the chain, ahead of the 288 letter LEDs.
+#define STATUS_LED_COUNT 1
+
 //--------------------------------------------------------------------------
 // Displaying Option for "It Is"
 //--------------------------------------------------------------------------
