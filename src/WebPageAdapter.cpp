@@ -215,6 +215,12 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload,
         case COMMAND_MODE_GAME: {
             // "011" + game (3 digits) + player name (up to 8 characters),
             // game ids see wc24h::ArcadeGameId
+            if (length > 14) {
+                // A color payload from an old page that still thinks a game
+                // is running: never start a game from it.
+                command = G.prog;
+                break;
+            }
             const uint32_t game =
                 length >= 6 ? split(payload, 3) : wc24h::GAME_TETRIS;
             gameRequest = game > 0 && game < 255 ? game : wc24h::GAME_TETRIS;

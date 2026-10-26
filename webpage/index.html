@@ -1,13 +1,13 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
-    <title data-i18next="title">ESPWordClock</title>
+    <title data-i18next="title">Wordclock24</title>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <!-- "Add to home screen" opens the page full screen like an app -->
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-title" content="Wortuhr">
+    <meta name="apple-mobile-web-app-title" content="Wordclock24">
     <meta name="theme-color" content="#303944">
 
     <!-- stylesheets -->
@@ -722,6 +722,11 @@
                     </div>
                     <div class="paint-pad" data-controls="paint">
                         <div class="palette" id="paint-palette"></div>
+                        <div class="pure-form paint-brightness">
+                            <label for="paint-brightness" data-i18next="games.brightness"></label>
+                            <input type="range" id="paint-brightness" min="5" max="100" step="5" value="100">
+                            <output id="paint-brightness-value">100 %</output>
+                        </div>
                         <div class="paint-buttons">
                             <button type="button" class="pure-button" id="paint-fill" data-i18next="games.fill"></button>
                             <button type="button" class="pure-button" id="paint-clear" data-i18next="games.clear"></button>
@@ -1382,20 +1387,21 @@
         </div> <!--/pure-g-->
     </main> <!--/content-->
 
-    <nav class="bottom-nav" aria-label="navigation">
-        <button type="button" data-navigation="home"><span aria-hidden="true">&#127968;</span><span data-i18next="home.h1"></span></button>
-        <button type="button" data-navigation="games"><span aria-hidden="true">&#127918;</span><span data-i18next="nav.games"></span></button>
-        <button type="button" data-navigation="main"><span aria-hidden="true">&#127912;</span><span data-i18next="colors.h1"></span></button>
-        <button type="button" data-navigation="extras"><span aria-hidden="true">&#9200;</span><span data-i18next="nav.extras"></span></button>
-        <button type="button" data-navigation="settings"><span aria-hidden="true">&#9881;</span><span data-i18next="nav.settings"></span></button>
-    </nav>
-
     <footer class="footer">
         <span data-i18next="footer.version"></span>
         <span id="version" class="version">0.0.0</span>
         <span id="pioenv" class="env">PIOENVIRONMENTPLACEHOLDER</span>
     </footer>
 </div>
+
+<!-- outside .layout so it stays fixed on iOS Safari -->
+<nav class="bottom-nav" aria-label="navigation">
+    <button type="button" data-navigation="home"><span aria-hidden="true">&#127968;</span><span data-i18next="home.h1"></span></button>
+    <button type="button" data-navigation="games"><span aria-hidden="true">&#127918;</span><span data-i18next="nav.games"></span></button>
+    <button type="button" data-navigation="main"><span aria-hidden="true">&#127912;</span><span data-i18next="colors.h1"></span></button>
+    <button type="button" data-navigation="extras"><span aria-hidden="true">&#9200;</span><span data-i18next="nav.extras"></span></button>
+    <button type="button" data-navigation="settings"><span aria-hidden="true">&#9881;</span><span data-i18next="nav.settings"></span></button>
+</nav>
 
 <!-- scripts -->
 <script src="./i18next.min.js"></script>

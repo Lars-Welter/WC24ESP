@@ -80,6 +80,7 @@ const CMD = {
 	MODE_TIMER: 12,
 	MODE_MESSAGE: 13,
 	MODE_AMBIENT: 14,
+	MODE_ALARM: 15,
 
 	// Settings
 	SET_INITIAL_VALUES: 20,
@@ -531,7 +532,9 @@ function initWebsocket() {
 					modeColorForm.style.gridTemplateColumns = data.hasSecondsFrame ? "1fr 1fr 1fr" : "1fr 1fr";
 				}
 
-				command = data.prog === 0 ? CMD.MODE_WORD_CLOCK : data.prog;
+				// Games, timer, messages, moods and the alarm are temporary: color
+				// changes must not restart them, so they count as the word clock.
+				command = data.prog === 0 || isTemporaryMode(data.prog) ? CMD.MODE_WORD_CLOCK : data.prog;
 				const inputID = MODE_TO_INPUT_ID.get(data.prog);
 				debugMessage(`Mode is ${data.prog} (${inputID})`);
 
@@ -748,7 +751,14 @@ function sendBrightnessData() {
 	debugMessage(`Brightness${debugMessageReconfigured}`);
 }
 
+function isTemporaryMode(mode) {
+	return mode >= CMD.MODE_GAME && mode <= CMD.MODE_ALARM;
+}
+
 function sendColorData(command, addData = "") {
+	if (isTemporaryMode(command)) {
+		command = CMD.MODE_WORD_CLOCK;
+	}
 	sendCmd(command, nstr(colorPosition) +
 	nstr(hsb[colorPosition][0]) +
 	nstr(hsb[colorPosition][1]) +
@@ -1609,6 +1619,7 @@ const GAME_KEY = {
 	PAINT_SET: 20,
 	PAINT_FILL: 21,
 	PAINT_CLEAR: 22,
+	PAINT_BRIGHTNESS: 23,
 	ANSWER: 30,
 	TAP: 31
 };
@@ -1625,9 +1636,37 @@ const FRONT_LETTERS = [
 	"VIERZIGZWÖLFÜNFZIG", "MINUTENUHREFRÜHVOR", "ABENDSMITTERNACHTS",
 	"MORGENSWARMMITTAGS"
 ];
-// Same order as wc24h::Palette in Arcade.h
-const PAINT_COLORS = ["#000000", "#ff0000", "#ff7700", "#ffdd00", "#00dd00", "#00dddd",
-	"#0055ff", "#9933ff", "#ff66cc", "#ffffff"];
+// Paint board colors, same numbering as wc24h::Palette / paletteHsv() in Arcade.h
+const PAL_COUNT = 15;
+const PAINT_BRIGHT = PAL_COUNT;
+const PAINT_PASTEL = PAINT_BRIGHT + 12;
+const PAINT_DARK = PAINT_PASTEL + 12;
+const PAINT_EXTRA = PAINT_DARK + 12;
+const PAINT_SWATCH_ROWS = [
+	Array.from({ length: 12 }, (unused, i) => PAINT_BRIGHT + i),
+	Array.from({ length: 12 }, (unused, i) => PAINT_PASTEL + i),
+	Array.from({ length: 12 }, (unused, i) => PAINT_DARK + i),
+	[9, PAINT_EXTRA, PAINT_EXTRA + 1, PAINT_EXTRA + 2, PAINT_EXTRA + 3, 0]
+];
+
+function paletteHsv(index) {
+	const base = [[0, 0, 0], [0, 1, 1], [0.07, 1, 1], [0.15, 1, 1], [0.33, 1, 1], [0.5, 1, 1],
+		[0.66, 1, 1], [0.78, 1, 1], [0.9, 0.7, 1], [0, 0, 1], [0, 0, 0.25], [0, 1, 0.3],
+		[0.33, 1, 0.3], [0.66, 1, 0.35], [0.15, 1, 0.3]];
+	if (index < PAL_COUNT) return base[index];
+	if (index < PAINT_PASTEL) return [(index - PAINT_BRIGHT) / 12, 1, 1];
+	if (index < PAINT_DARK) return [(index - PAINT_PASTEL) / 12, 0.45, 1];
+	if (index < PAINT_EXTRA) return [(index - PAINT_DARK) / 12, 1, 0.35];
+	return [[0.1, 0.3, 1], [0, 0, 0.55], [0, 0, 0.2], [0.07, 0.9, 0.45]][index - PAINT_EXTRA] || [0, 0, 0];
+}
+
+function hsvToCss([hue, sat, val]) {
+	const channel = offset => {
+		const pos = (offset + hue * 6) % 6;
+		return Math.round(255 * (val - val * sat * Math.max(0, Math.min(pos, 4 - pos, 1))));
+	};
+	return `rgb(${channel(5)}, ${channel(3)}, ${channel(1)})`;
+}
 
 /*
  * Per game: control panel, which pad buttons are shown, key labels.
@@ -1661,7 +1700,7 @@ const PROG_NAMES = new Map([[0, "mode.wordclock"], [1, "mode.wordclock"], [2, "f
 
 let currentGame = 0;
 let lastGameStatus = null;
-let paintColor = 1;
+let paintColor = PAINT_BRIGHT;
 let paintFill = false;
 let mathInput = "";
 let frameWaiting = false;
@@ -1874,7 +1913,14 @@ function renderGameStatus(data) {
 	if (data.lives !== undefined && data.game !== 13) {
 		parts.push("♥".repeat(Math.max(0, data.lives)));
 	}
-	if (data.level) {
+	if (data.game === 20) {
+		// the paint board reports its brightness in "level"
+		const slider = document.getElementById("paint-brightness");
+		if (data.level && document.activeElement !== slider) {
+			slider.value = data.level;
+			document.getElementById("paint-brightness-value").textContent = `${data.level} %`;
+		}
+	} else if (data.level) {
 		parts.push(i18next.t("games.level", { level: data.level }));
 	}
 	document.getElementById("game-score-line").textContent = parts.join(" · ");
@@ -2055,21 +2101,32 @@ function initGamePads() {
 		});
 	});
 
-	// Paint palette
+	// Paint palette: bright, pastel and dark hues, then white, greys, brown, eraser
 	const palette = document.getElementById("paint-palette");
-	PAINT_COLORS.forEach((color, index) => {
-		const swatch = document.createElement("button");
-		swatch.type = "button";
-		swatch.className = "swatch";
-		swatch.style.background = color;
-		swatch.setAttribute("aria-label", color);
-		swatch.classList.toggle("selected", index === paintColor);
-		swatch.addEventListener("click", () => {
-			paintColor = index;
-			palette.querySelectorAll(".swatch").forEach((el, i) => el.classList.toggle("selected", i === index));
+	PAINT_SWATCH_ROWS.forEach(row => {
+		row.forEach(index => {
+			const swatch = document.createElement("button");
+			swatch.type = "button";
+			swatch.className = "swatch";
+			swatch.dataset.color = index;
+			swatch.style.background = hsvToCss(paletteHsv(index));
+			swatch.setAttribute("aria-label", index === 0 ? i18next.t("games.eraser") : `color ${index}`);
+			if (index === 0) {
+				swatch.classList.add("eraser");
+			}
+			swatch.classList.toggle("selected", index === paintColor);
+			swatch.addEventListener("click", () => {
+				paintColor = index;
+				palette.querySelectorAll(".swatch").forEach(el => el.classList.toggle("selected", el === swatch));
+			});
+			palette.appendChild(swatch);
 		});
-		palette.appendChild(swatch);
 	});
+	const paintBrightness = document.getElementById("paint-brightness");
+	paintBrightness.addEventListener("input", () => {
+		document.getElementById("paint-brightness-value").textContent = `${paintBrightness.value} %`;
+	});
+	paintBrightness.addEventListener("change", () => sendGameKey(GAME_KEY.PAINT_BRIGHTNESS, Number(paintBrightness.value)));
 	document.getElementById("paint-fill").addEventListener("click", () => sendGameKey(GAME_KEY.PAINT_FILL, paintColor));
 	document.getElementById("paint-clear").addEventListener("click", () => sendGameKey(GAME_KEY.PAINT_CLEAR));
 
@@ -2084,7 +2141,7 @@ function initGamePads() {
 		}
 		lastCell = cell;
 		if (currentGame === 20) {
-			sendGameKey(GAME_KEY.PAINT_SET, cell * 16 + paintColor);
+			sendGameKey(GAME_KEY.PAINT_SET, cell * 64 + paintColor);
 		} else if (currentGame === 15) {
 			sendGameKey(GAME_KEY.TAP, cell);
 			vibrate(10);

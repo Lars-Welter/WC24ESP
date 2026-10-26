@@ -51,9 +51,10 @@ enum ArcadeKey : uint8_t {
     GAME_KEY_COLOR2 = 12,
     GAME_KEY_COLOR3 = 13,
     GAME_KEY_COLOR4 = 14,
-    GAME_KEY_PAINT_SET = 20, // value = cell * 16 + color
+    GAME_KEY_PAINT_SET = 20, // value = cell * 64 + color
     GAME_KEY_PAINT_FILL = 21, // value = color
     GAME_KEY_PAINT_CLEAR = 22,
+    GAME_KEY_PAINT_BRIGHTNESS = 23, // value = 5..100 %
     GAME_KEY_ANSWER = 30, // value = number or hh * 100 + mm
     GAME_KEY_TAP = 31,    // value = cell (row * 18 + col)
     GAME_KEY_LETTER_A = 65, // 65..90 = A..Z
@@ -76,8 +77,58 @@ enum Palette : uint8_t {
     PAL_DARK_GREEN,
     PAL_DARK_BLUE,
     PAL_DARK_YELLOW,
-    PAL_COUNT
+    PAL_COUNT,
+    // Extra colors for the paint board: 12 hues each bright, pastel and
+    // dark, then warm white, light grey, dark grey, brown.
+    PAL_PAINT_BRIGHT = PAL_COUNT,
+    PAL_PAINT_PASTEL = PAL_PAINT_BRIGHT + 12,
+    PAL_PAINT_DARK = PAL_PAINT_PASTEL + 12,
+    PAL_PAINT_WARM_WHITE = PAL_PAINT_DARK + 12,
+    PAL_PAINT_LIGHT_GREY,
+    PAL_PAINT_DARK_GREY,
+    PAL_PAINT_BROWN,
+    PAL_EXT_COUNT
 };
+
+struct PaletteHsv {
+    float h, s, v;
+};
+
+// Color of a palette index as hue/saturation/value (0..1); also used by
+// the web page to draw the paint board colors.
+inline PaletteHsv paletteHsv(uint8_t index) {
+    static const PaletteHsv BASE[PAL_COUNT] = {
+        {0.f, 0.f, 0.f},    {0.f, 1.f, 1.f},    {0.07f, 1.f, 1.f},
+        {0.15f, 1.f, 1.f},  {0.33f, 1.f, 1.f},  {0.5f, 1.f, 1.f},
+        {0.66f, 1.f, 1.f},  {0.78f, 1.f, 1.f},  {0.9f, 0.7f, 1.f},
+        {0.f, 0.f, 1.f},    {0.f, 0.f, 0.25f},  {0.f, 1.f, 0.3f},
+        {0.33f, 1.f, 0.3f}, {0.66f, 1.f, 0.35f}, {0.15f, 1.f, 0.3f},
+    };
+    if (index < PAL_COUNT) {
+        return BASE[index];
+    }
+    if (index < PAL_PAINT_PASTEL) {
+        return {(index - PAL_PAINT_BRIGHT) / 12.f, 1.f, 1.f};
+    }
+    if (index < PAL_PAINT_DARK) {
+        return {(index - PAL_PAINT_PASTEL) / 12.f, 0.45f, 1.f};
+    }
+    if (index < PAL_PAINT_WARM_WHITE) {
+        return {(index - PAL_PAINT_DARK) / 12.f, 1.f, 0.35f};
+    }
+    switch (index) {
+    case PAL_PAINT_WARM_WHITE:
+        return {0.1f, 0.3f, 1.f};
+    case PAL_PAINT_LIGHT_GREY:
+        return {0.f, 0.f, 0.55f};
+    case PAL_PAINT_DARK_GREY:
+        return {0.f, 0.f, 0.2f};
+    case PAL_PAINT_BROWN:
+        return {0.07f, 0.9f, 0.45f};
+    default:
+        return {0.f, 0.f, 0.f};
+    }
+}
 
 struct GameInput {
     uint8_t key;
@@ -2025,6 +2076,7 @@ public:
 class PaintGame : public ArcadeGame {
 public:
     Canvas picture;
+    uint8_t brightness = 100; // percent of the clock brightness
     bool dirty = true;
 
     PaintGame() {
@@ -2041,9 +2093,9 @@ public:
     void input(const GameInput &in, uint32_t) override {
         switch (in.key) {
         case GAME_KEY_PAINT_SET: {
-            const uint32_t cellNumber = in.value / 16;
-            const uint8_t color = in.value % 16;
-            if (cellNumber < SNAKE_CELLS && color < PAL_COUNT) {
+            const uint32_t cellNumber = in.value / 64;
+            const uint8_t color = in.value % 64;
+            if (cellNumber < SNAKE_CELLS && color < PAL_EXT_COUNT) {
                 picture.cell[cellNumber / GAME_COLS][cellNumber % GAME_COLS] =
                     color;
                 dirty = true;
@@ -2051,7 +2103,7 @@ public:
             break;
         }
         case GAME_KEY_PAINT_FILL:
-            if (in.value < PAL_COUNT) {
+            if (in.value < PAL_EXT_COUNT) {
                 picture.clear(in.value);
                 dirty = true;
             }
@@ -2059,6 +2111,12 @@ public:
         case GAME_KEY_PAINT_CLEAR:
             picture.clear();
             dirty = true;
+            break;
+        case GAME_KEY_PAINT_BRIGHTNESS:
+            if (in.value >= 5 && in.value <= 100) {
+                brightness = in.value;
+                dirty = true;
+            }
             break;
         default:
             break;
@@ -2075,7 +2133,7 @@ public:
         memcpy(canvas.cell, picture.cell, sizeof canvas.cell);
     }
 
-    void status(GameStatus &) const override {}
+    void status(GameStatus &s) const override { s.level = brightness; }
 };
 
 //------------------------------------------------------------------------------

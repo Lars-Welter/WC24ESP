@@ -1,5 +1,5 @@
 let TRANSLATION_DE_DE = {
-	"title": "Wortuhr",
+	"title": "Wordclock24",
 
 	"menu": {
 		"aria-show-menu": "Menü anzeigen",
@@ -18,7 +18,7 @@ let TRANSLATION_DE_DE = {
 
 	"connection-lost": {
 		"button": "Verbinden",
-		"text": "Die Verbindung zur Wortuhr wurde unterbrochen."
+		"text": "Die Verbindung zur Wordclock24 wurde unterbrochen."
 	},
 
 	"reboot-recommended": {
@@ -40,7 +40,7 @@ let TRANSLATION_DE_DE = {
 		},
 		"mode": {
 			"h2": "Modus",
-			"wordclock": "Wortuhr",
+			"wordclock": "Wordclock24",
 			"color": "Farbe",
 			"seconds": "Sekunden",
 			"digital-clock": "Digitaluhr",
@@ -169,8 +169,8 @@ let TRANSLATION_DE_DE = {
 			"bn-9-8": "🇧🇩 9 × 8",
 			"tr-10-11": "🇹🇷 10 × 11",
 			"invert-min-dir": "Minutenzählrichtung invertieren",
-			"mirror-vertically": "Wortuhr vertikal spiegeln",
-			"mirror-horizontally": "Wortuhr horizontal spiegeln",
+			"mirror-vertically": "Wordclock24 vertikal spiegeln",
+			"mirror-horizontally": "Wordclock24 horizontal spiegeln",
 			"flip-horz-vert": "Horizontales und vertikales Layout drehen",
 			"extra-led-per-row": "Extra LED pro Reihe hinzufügen",
 			"meander-rows": "Reihen in Mäander angeordnet",
@@ -442,7 +442,7 @@ let TRANSLATION_DE_DE = {
 		"h1": "Smart Home",
 		"mqtt": {
 			"h2": "MQTT",
-			"text": "Die Software der Wortuhr bietet die Möglichkeit der Steuerung über die MQTT-Schnittstelle. Hierbei kann man über sein bestehendes Home-Assistant-Setup die Uhr einbinden, um rudimentäre Funktionen steuern zu können.",
+			"text": "Die Software der Wordclock24 bietet die Möglichkeit der Steuerung über die MQTT-Schnittstelle. Hierbei kann man über sein bestehendes Home-Assistant-Setup die Uhr einbinden, um rudimentäre Funktionen steuern zu können.",
 			"activate": "Aktiviere MQTT",
 			"server": "Serveradresse",
 			"port": "Port",
@@ -493,6 +493,8 @@ let TRANSLATION_DE_DE = {
 		"hour": "Stunde",
 		"minute": "Minute",
 		"check": "Prüfen",
+		"brightness": "Helligkeit",
+		"eraser": "Radierer",
 		"fill": "Alles füllen",
 		"clear": "Löschen",
 		"highscores": "Bestenliste",
@@ -579,7 +581,7 @@ let TRANSLATION_DE_DE = {
 		"settings": "Mehr"
 	},
 	"mode": {
-		"wordclock": "Wortuhr"
+		"wordclock": "Wordclock24"
 	},
 	"status": {
 		"line": "Modus: {{mode}} · WLAN: {{wifi}} · Anzeige: {{power}}",

@@ -1376,17 +1376,34 @@ input:checked + .slider::before {
 }
 
 .palette {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.4em;
+    display: grid;
+    grid-template-columns: repeat(12, 1fr);
+    gap: 0.3em;
+    max-width: 30em;
 }
 
 .palette .swatch {
-    width: 2.6em;
-    height: 2.6em;
+    aspect-ratio: 1;
+    min-width: 0;
+    padding: 0;
     border: 2px solid var(--app-border-strong);
     border-radius: 50%;
     cursor: pointer;
+}
+
+.palette .swatch.eraser {
+    background-image: linear-gradient(45deg, transparent 45%, #e53935 45%, #e53935 55%, transparent 55%) !important;
+}
+
+.paint-brightness {
+    display: flex;
+    align-items: center;
+    gap: 0.6em;
+    margin-top: 0.8em;
+}
+
+.paint-brightness input {
+    flex: 1;
 }
 
 .palette .swatch.selected {
@@ -1444,6 +1461,9 @@ body:not(.expert) .expert-only {
         justify-content: space-around;
         padding: 0.3em 0 calc(0.3em + env(safe-area-inset-bottom));
         background: var(--menu-bg-solid);
+
+        /* own compositing layer: keeps it pinned while iOS scrolls */
+        transform: translateZ(0);
     }
 
     .bottom-nav button {

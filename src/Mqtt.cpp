@@ -1017,7 +1017,7 @@ void Mqtt::sendDiscovery() {
     macConnection.add(unique_id);
     device["name"] = String(G.mqtt.clientId);
     device["sw"] = VERSION;
-    device["mdl"] = "Word Clock";
+    device["mdl"] = "Wordclock24";
     device["mf"] = "ESPWortuhr";
     device["cu"] = "http://" + WiFi.localIP().toString();
 

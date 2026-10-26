@@ -1,5 +1,5 @@
 let TRANSLATION_EN_US = {
-	"title": "Wordclock",
+	"title": "Wordclock24",
 
 	"menu": {
 		"aria-show-menu": "Show Menu",
@@ -40,7 +40,7 @@ let TRANSLATION_EN_US = {
 		},
 		"mode": {
 			"h2": "Mode",
-			"wordclock": "Wordclock",
+			"wordclock": "Wordclock24",
 			"color": "Color",
 			"seconds": "Seconds",
 			"digital-clock": "Digital Clock",
@@ -493,6 +493,8 @@ let TRANSLATION_EN_US = {
 		"hour": "Hour",
 		"minute": "Minute",
 		"check": "Check",
+		"brightness": "Brightness",
+		"eraser": "Eraser",
 		"fill": "Fill all",
 		"clear": "Clear",
 		"highscores": "High scores",
@@ -579,7 +581,7 @@ let TRANSLATION_EN_US = {
 		"settings": "More"
 	},
 	"mode": {
-		"wordclock": "Word clock"
+		"wordclock": "Wordclock24"
 	},
 	"status": {
 		"line": "Mode: {{mode}} · WiFi: {{wifi}} · Display: {{power}}",

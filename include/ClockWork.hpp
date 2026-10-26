@@ -2107,22 +2107,15 @@ void broadcastJson(const JsonDocument &doc) {
 // Drawing
 
 HsbColor paletteColor(uint8_t index, float brightness) {
-    struct Entry {
-        float h, s, v;
-    };
-    static const Entry PALETTE[wc24h::PAL_COUNT] = {
-        {0.f, 0.f, 0.f},     {0.f, 1.f, 1.f},     {0.07f, 1.f, 1.f},
-        {0.15f, 1.f, 1.f},   {0.33f, 1.f, 1.f},   {0.5f, 1.f, 1.f},
-        {0.66f, 1.f, 1.f},   {0.78f, 1.f, 1.f},   {0.9f, 0.7f, 1.f},
-        {0.f, 0.f, 1.f},     {0.f, 0.f, 0.25f},   {0.f, 1.f, 0.3f},
-        {0.33f, 1.f, 0.3f},  {0.66f, 1.f, 0.35f}, {0.15f, 1.f, 0.3f},
-    };
-    const Entry &e = PALETTE[index < wc24h::PAL_COUNT ? index : 0];
-    return HsbColor(e.h, e.s, e.v * brightness);
+    const wc24h::PaletteHsv c = wc24h::paletteHsv(index);
+    return HsbColor(c.h, c.s, c.v * brightness);
 }
 
 void drawCanvas(const wc24h::Canvas &canvas) {
-    const float bri = gameBrightness();
+    float bri = gameBrightness();
+    if (game == &paintGame) {
+        bri *= paintGame.brightness / 100.f;
+    }
     for (uint8_t row = 0; row < wc24h::GAME_ROWS; row++) {
         for (uint8_t col = 0; col < wc24h::GAME_COLS; col++) {
             led.setPixel(row, col, paletteColor(canvas.cell[row][col], bri));

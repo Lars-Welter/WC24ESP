@@ -362,7 +362,7 @@ void testArcadeSmoke() {
                 game->render(canvas, now);
                 for (auto &row : canvas.cell) {
                     for (uint8_t v : row) {
-                        expectGame(v < wc24h::PAL_COUNT, "palette index");
+                        expectGame(v < wc24h::PAL_EXT_COUNT, "palette index");
                     }
                 }
                 wc24h::GameStatus status;
@@ -448,10 +448,19 @@ void testArcadeRules() {
     // Paint keeps its picture.
     wc24h::PaintGame pg;
     pg.start(0, 0);
-    pg.input({wc24h::GAME_KEY_PAINT_SET, 1, (2 * 18 + 3) * 16 + 4}, 0);
+    pg.input({wc24h::GAME_KEY_PAINT_SET, 1,
+              (2 * 18 + 3) * 64 + wc24h::PAL_PAINT_BROWN},
+             0);
     wc24h::Canvas canvas;
     pg.render(canvas, 0);
-    expectGame(canvas.cell[2][3] == 4, "paint sets a cell");
+    expectGame(canvas.cell[2][3] == wc24h::PAL_PAINT_BROWN,
+               "paint sets a cell");
+    pg.input({wc24h::GAME_KEY_PAINT_BRIGHTNESS, 1, 40}, 0);
+    expectGame(pg.brightness == 40, "paint brightness");
+    pg.input({wc24h::GAME_KEY_PAINT_SET, 1, wc24h::PAL_EXT_COUNT}, 0);
+    pg.render(canvas, 0);
+    expectGame(canvas.cell[0][0] == 0, "invalid paint color ignored");
+    expectGame(wc24h::PAL_EXT_COUNT <= 64, "paint colors fit the encoding");
 
     // 3x5 text and scores stay on the canvas.
     canvas.clear();
