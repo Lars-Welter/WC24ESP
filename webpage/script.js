@@ -133,7 +133,8 @@ const CMD = {
 	REQ_I2C_SCAN: 207,
 	REQ_WC24H: 208,
 	REQ_FRAME: 209,
-	REQ_HIGHSCORES: 210
+	REQ_HIGHSCORES: 210,
+	REQ_PICTURES: 211
 };
 
 const NIGHT_TIMER_FLAG_ACTIVE = 0x80;
@@ -428,6 +429,10 @@ function initWebsocket() {
 			}
 			case "highscores": {
 				renderHighscores(data);
+				break;
+			}
+			case "picture": {
+				renderPicture(data);
 				break;
 			}
 			case "alarm": {
@@ -1684,6 +1689,9 @@ const GAME_KEY = {
 	PAINT_FILL: 21,
 	PAINT_CLEAR: 22,
 	PAINT_BRIGHTNESS: 23,
+	PAINT_SAVE: 24,
+	PAINT_LOAD: 25,
+	PAINT_DELETE: 26,
 	ANSWER: 30,
 	TAP: 31
 };
@@ -1958,7 +1966,95 @@ function startGame(id) {
 	if (HIGHSCORE_GAMES.has(id)) {
 		sendCmd(CMD.REQ_HIGHSCORES, nstr(id));
 	}
+	if (info.controls === "paint") {
+		sendCmd(CMD.REQ_PICTURES);
+	}
 	document.getElementById("game-box").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+/*
+ * Paint board pictures: eight slots stored on the clock, so every phone in
+ * the family sees the same pictures. Tapping a picture loads it, tapping an
+ * empty slot saves the current picture there.
+ */
+const PICTURE_SLOTS = 8;
+const pictureFilled = [];
+
+function drawPicture(canvas, cells) {
+	const ctx = canvas.getContext("2d");
+	ctx.clearRect(0, 0, canvas.width, canvas.height);
+	for (let cell = 0; cell * 2 < cells.length; cell++) {
+		const color = parseInt(cells.substr(cell * 2, 2), 16);
+		if (color) {
+			ctx.fillStyle = hsvToCss(paletteHsv(color));
+			ctx.fillRect(cell % canvas.width, Math.floor(cell / canvas.width), 1, 1);
+		}
+	}
+}
+
+function savePicture(slot) {
+	if (pictureFilled[slot] && !window.confirm(i18next.t("games.picture-overwrite"))) {
+		return;
+	}
+	sendGameKey(GAME_KEY.PAINT_SAVE, slot);
+}
+
+function initPictures() {
+	const container = document.getElementById("paint-pictures");
+	for (let slot = 0; slot < PICTURE_SLOTS; slot++) {
+		const card = document.createElement("div");
+		card.className = "picture-slot empty";
+		card.dataset.slot = slot;
+
+		const thumb = document.createElement("button");
+		thumb.type = "button";
+		thumb.className = "picture-thumb";
+		thumb.setAttribute("aria-label", i18next.t("games.picture-n", { num: slot + 1 }));
+		const canvas = document.createElement("canvas");
+		canvas.width = 18;
+		canvas.height = 16;
+		thumb.appendChild(canvas);
+		thumb.addEventListener("click", () => {
+			if (pictureFilled[slot]) {
+				sendGameKey(GAME_KEY.PAINT_LOAD, slot);
+				vibrate(30);
+			} else {
+				savePicture(slot);
+			}
+		});
+
+		const buttons = document.createElement("div");
+		buttons.className = "picture-buttons";
+		const save = document.createElement("button");
+		save.type = "button";
+		save.className = "pure-button picture-save";
+		save.textContent = i18next.t("games.save");
+		save.addEventListener("click", () => savePicture(slot));
+		const remove = document.createElement("button");
+		remove.type = "button";
+		remove.className = "pure-button picture-delete";
+		remove.textContent = "\u2715";
+		remove.setAttribute("aria-label", i18next.t("games.delete"));
+		remove.addEventListener("click", () => {
+			if (window.confirm(i18next.t("games.picture-delete"))) {
+				sendGameKey(GAME_KEY.PAINT_DELETE, slot);
+			}
+		});
+		buttons.append(save, remove);
+		card.append(thumb, buttons);
+		container.appendChild(card);
+	}
+}
+
+function renderPicture(data) {
+	const card = document.querySelector(`#paint-pictures [data-slot="${data.slot}"]`);
+	if (!card) {
+		return;
+	}
+	pictureFilled[data.slot] = data.cells.length > 0;
+	card.classList.toggle("empty", !pictureFilled[data.slot]);
+	card.querySelector(".picture-delete").disabled = !pictureFilled[data.slot];
+	drawPicture(card.querySelector("canvas"), data.cells);
 }
 
 function renderGameStatus(data) {
@@ -2192,6 +2288,7 @@ function initGamePads() {
 			palette.appendChild(swatch);
 		});
 	});
+	initPictures();
 	const paintBrightness = document.getElementById("paint-brightness");
 	paintBrightness.addEventListener("input", () => {
 		document.getElementById("paint-brightness-value").textContent = `${paintBrightness.value} %`;

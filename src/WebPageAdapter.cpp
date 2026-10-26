@@ -834,6 +834,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload,
 
         case COMMAND_REQUEST_BIRTHDAYS:
         case COMMAND_REQUEST_FRAME:
+        case COMMAND_REQUEST_PICTURES:
         case COMMAND_REQUEST_WC24H:
         case COMMAND_REQUEST_MQTT_VALUES:
         case COMMAND_REQUEST_CONFIG_VALUES:

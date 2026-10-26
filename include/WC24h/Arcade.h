@@ -55,6 +55,9 @@ enum ArcadeKey : uint8_t {
     GAME_KEY_PAINT_FILL = 21, // value = color
     GAME_KEY_PAINT_CLEAR = 22,
     GAME_KEY_PAINT_BRIGHTNESS = 23, // value = 5..100 %
+    GAME_KEY_PAINT_SAVE = 24,   // value = picture slot (stored by ClockWork)
+    GAME_KEY_PAINT_LOAD = 25,   // value = picture slot
+    GAME_KEY_PAINT_DELETE = 26, // value = picture slot
     GAME_KEY_ANSWER = 30, // value = number or hh * 100 + mm
     GAME_KEY_TAP = 31,    // value = cell (row * 18 + col)
     GAME_KEY_LETTER_A = 65, // 65..90 = A..Z

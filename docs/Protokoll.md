@@ -34,6 +34,10 @@ g++ -std=gnu++11 -Wall -Wextra -Werror -Iinclude test/wc24h_test.cpp -o wc24h_te
   `extras2Magic`); `ensureExtraSettings*()` in `src/WordClock.cpp` setzt
   sie bei älteren Speicherständen auf Standardwerte, ohne den Rest zu
   verlieren.
+* **Bilder des Malbretts**: NVS-Namensraum `wc24h-pic`, Schlüssel
+  `p<Platz>`, je 288 Farbnummern + Helligkeit. `cells` in der Nachricht
+  `picture` sind zwei Hex-Ziffern je Feld, zeilenweise; leer bei freiem
+  Platz. Nach Speichern/Löschen geht die Nachricht an alle Handys.
 * **Bestenlisten**: ESP32-NVS (`Preferences`), Namensraum `wc24h-hs`,
   Schlüssel `g<Spiel-Nr>`, je fünf Einträge `{char name[9]; uint32_t score}`.
 
@@ -84,6 +88,7 @@ dreistellig mit führenden Nullen, Texte mit Leerzeichen aufgefüllt).
 | 208 | WordClock24h-Einstellungen, Symbolnamen |
 | 209 | Live-Bild (siehe unten) |
 | 210 + Spiel-Nr. (3) | Bestenliste |
+| 211 | gespeicherte Bilder, je Platz eine Nachricht `picture` |
 
 ### Nachrichten der Uhr
 
@@ -107,6 +112,7 @@ Phase (`wait`/`go`) und `foul`. `rank` > 0 bei neuem Rekord.
 
 ```json
 {"command": "highscores", "game": 1, "list": [{"name": "LARS", "score": 1200}]}
+{"command": "picture", "slot": 0, "bri": 80, "cells": "0f0f00…"}
 {"command": "timer", "mode": 1, "running": true, "seconds": 287, "finished": false}
 {"command": "alarm", "ringing": true}
 ```
@@ -145,6 +151,9 @@ Phase (`wait`/`go`) und `foul`. `rank` > 0 bei neuem Rekord.
 | 21 | Malbrett: alles füllen | Farbe |
 | 22 | Malbrett: löschen | |
 | 23 | Malbrett: Helligkeit des Bildes | 5–100 (%) |
+| 24 | Malbrett: Bild speichern | Platz 0–7 |
+| 25 | Malbrett: Bild laden | Platz 0–7 |
+| 26 | Malbrett: Bild löschen | Platz 0–7 |
 | 30 | Antwort (Quiz `hh*100+mm`, Kopfrechnen Zahl) | Zahl |
 | 31 | Feld antippen (Wörter finden) | Zeile × 18 + Spalte |
 | 65–90 | Buchstabe A–Z (Galgenmännchen) | |

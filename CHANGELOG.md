@@ -3,6 +3,13 @@
 Alle Änderungen dieser SP803E-Variante gegenüber der
 [Multilayout-ESP-Wordclock](https://github.com/ESPWortuhr/Multilayout-ESP-Wordclock) 4.4.1.
 
+## Bilder speichern
+
+* **Malbrett**: acht Speicherplätze für Bilder mit Vorschau. Die Bilder
+  liegen im Flash der Uhr (NVS, Namensraum `wc24h-pic`), überstehen einen
+  Neustart und sind auf jedem Handy sichtbar. Bild antippen lädt es, ein
+  leerer Platz oder *Speichern* legt das aktuelle Bild ab, ✕ löscht.
+
 ## Verbindung und flüssigere Spiele
 
 * Korrektur: Die Weboberfläche ließ sich nach einiger Zeit nicht mehr öffnen

@@ -2216,6 +2216,112 @@ void sendHighscores(uint8_t id, int16_t client) {
 }
 
 //------------------------------------------------------------------------------
+// Paint board pictures, eight slots in the NVS, shared by all phones
+
+constexpr uint8_t PICTURE_SLOTS = 8;
+const char *const PICTURE_NAMESPACE = "wc24h-pic";
+
+struct StoredPicture {
+    uint8_t cells[wc24h::GAME_ROWS * wc24h::GAME_COLS];
+    uint8_t brightness;
+};
+
+bool loadPicture(uint8_t slot, StoredPicture &picture) {
+    Preferences prefs;
+    if (slot >= PICTURE_SLOTS || !prefs.begin(PICTURE_NAMESPACE, true)) {
+        return false;
+    }
+    char key[4];
+    snprintf(key, sizeof(key), "p%u", slot);
+    const bool found = prefs.isKey(key) &&
+                       prefs.getBytes(key, &picture, sizeof(picture)) ==
+                           sizeof(picture);
+    prefs.end();
+    return found;
+}
+
+// picture == nullptr deletes the slot
+void storePicture(uint8_t slot, const StoredPicture *picture) {
+    Preferences prefs;
+    if (slot >= PICTURE_SLOTS || !prefs.begin(PICTURE_NAMESPACE, false)) {
+        return;
+    }
+    char key[4];
+    snprintf(key, sizeof(key), "p%u", slot);
+    if (picture) {
+        prefs.putBytes(key, picture, sizeof(*picture));
+    } else {
+        prefs.remove(key);
+    }
+    prefs.end();
+}
+
+// {"command":"picture","slot":n,"bri":b,"cells":"<2 hex digits per cell>"},
+// "cells" is empty for a free slot. client < 0: to everybody
+void sendPicture(uint8_t slot, int16_t client) {
+    static char buffer[80 + sizeof(StoredPicture::cells) * 2];
+    static const char HEX_DIGITS[] = "0123456789abcdef";
+    StoredPicture picture;
+    const bool found = loadPicture(slot, picture);
+    int n = snprintf(buffer, sizeof(buffer),
+                     "{\"command\":\"picture\",\"slot\":%u,\"bri\":%u,"
+                     "\"cells\":\"",
+                     slot, found ? picture.brightness : 0);
+    if (found) {
+        for (uint8_t cell : picture.cells) {
+            buffer[n++] = HEX_DIGITS[cell >> 4];
+            buffer[n++] = HEX_DIGITS[cell & 0x0F];
+        }
+    }
+    buffer[n++] = '"';
+    buffer[n++] = '}';
+    buffer[n] = '\0';
+    if (client < 0) {
+        webSocket.broadcastTXT(buffer, n);
+    } else {
+        webSocket.sendTXT(client, buffer, n);
+    }
+}
+
+// Save, load and delete need the NVS, which the host-testable PaintGame
+// does not know about.
+bool handlePictureKey(const GameKeyEvent &event) {
+    const uint8_t slot = event.value;
+    switch (event.key) {
+    case wc24h::GAME_KEY_PAINT_SAVE: {
+        StoredPicture picture;
+        memcpy(picture.cells, paintGame.picture.cell, sizeof(picture.cells));
+        picture.brightness = paintGame.brightness;
+        storePicture(slot, &picture);
+        sendPicture(slot, -1);
+        return true;
+    }
+    case wc24h::GAME_KEY_PAINT_LOAD: {
+        StoredPicture picture;
+        if (loadPicture(slot, picture)) {
+            for (uint16_t i = 0; i < sizeof(picture.cells); i++) {
+                const uint8_t color = picture.cells[i];
+                paintGame.picture.cell[i / wc24h::GAME_COLS]
+                                      [i % wc24h::GAME_COLS] =
+                    color < wc24h::PAL_EXT_COUNT ? color : 0;
+            }
+            if (picture.brightness >= 5 && picture.brightness <= 100) {
+                paintGame.brightness = picture.brightness;
+            }
+            paintGame.dirty = true;
+        }
+        return true;
+    }
+    case wc24h::GAME_KEY_PAINT_DELETE:
+        storePicture(slot, nullptr);
+        sendPicture(slot, -1);
+        return true;
+    default:
+        return false;
+    }
+}
+
+//------------------------------------------------------------------------------
 // Games
 
 wc24h::ArcadeGame *gameFor(uint8_t id) {
@@ -2375,6 +2481,10 @@ void loopGame() {
             continue;
         }
         if (gamePaused) {
+            continue;
+        }
+        if (game == &paintGame && handlePictureKey(event)) {
+            changed = true;
             continue;
         }
         game->input({event.key, event.player, event.value}, now);
@@ -2798,6 +2908,13 @@ void ClockWork::loop(struct tm &tm) {
 
     case COMMAND_REQUEST_FRAME: {
         sendFrame(G.client_nr);
+        break;
+    }
+
+    case COMMAND_REQUEST_PICTURES: {
+        for (uint8_t slot = 0; slot < PICTURE_SLOTS; slot++) {
+            sendPicture(slot, G.client_nr);
+        }
         break;
     }
 
