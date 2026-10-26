@@ -11,6 +11,7 @@
 #include "WC24h/Games.h"
 #include "WC24h/NightTimer.h"
 #include "WC24h/Overlay.h"
+#include "WC24h/Text.h"
 #include "WC24h/Wc24hDisplay.h"
 #include "WC24h/Wc24hIcons.h"
 #include "WordClockState.h"
@@ -1767,33 +1768,59 @@ bool ClockWork::beginOverlay(const wc24h::Overlay &overlay,
 }
 
 //------------------------------------------------------------------------------
-// Notification from Home Assistant / MQTT: an icon (index into wc24h::ICONS)
-// or a scrolling text, shown once on top of the word clock.
+// Notification from Home Assistant / MQTT: an icon (see wc24h::findIcon)
+// and/or a text. With both, the icon comes first and the text scrolls
+// afterwards. Shown only on top of the word clock, so games, the timer and
+// moods are not interrupted.
 
-void ClockWork::showNotification(int16_t icon, const char *text) {
-    if (!led.getState() || overlayActive ||
-        (G.prog != COMMAND_IDLE && G.prog != COMMAND_MODE_WORD_CLOCK)) {
+namespace {
+char pendingNotificationText[PAYLOAD_LENGTH] = "";
+uint8_t pendingNotificationRepeats = 0;
+
+void startNotificationText(const char *text, uint8_t repeats) {
+    wc24h::toClockText(text, messageText, sizeof(messageText));
+    if (!messageText[0]) {
         return;
     }
+    messageRepeats = repeats ? repeats : 3;
+    G.prog = COMMAND_MODE_MESSAGE;
+    G.progInit = true;
+}
+} // namespace
+
+void ClockWork::showNotification(int16_t icon, const char *text,
+                                 uint8_t repeats) {
+    if (!led.getState() || overlayActive ||
+        (G.prog != COMMAND_IDLE && G.prog != COMMAND_MODE_WORD_CLOCK)) {
+        Serial.println("Notification skipped: display busy or off");
+        return;
+    }
+    if (repeats > 10) {
+        repeats = 10;
+    }
+    const bool hasText = text && text[0];
+    if (icon < 0 || icon >= wc24h::ICON_COUNT) {
+        if (hasText) {
+            startNotificationText(text, repeats);
+        }
+        return;
+    }
+
     static wc24h::Overlay notification;
     memset(&notification, 0, sizeof(notification));
     notification.flags = wc24h::OVERLAY_FLAG_ACTIVE;
-    notification.duration = 8;
-    if (icon >= 0 && icon < wc24h::ICON_COUNT) {
-        notification.type = wc24h::OVERLAY_ICON;
-        notification.icon = icon;
-    } else if (text && text[0]) {
-        notification.type = wc24h::OVERLAY_TICKER;
-        strlcpy(notification.text, text, sizeof(notification.text));
-    } else {
-        return;
-    }
+    notification.duration = 6;
+    notification.type = wc24h::OVERLAY_ICON;
+    notification.icon = icon;
     const time_t now = time(nullptr);
     struct tm tm;
     localtime_r(&now, &tm);
     if (!beginOverlay(notification, tm)) {
         return;
     }
+    strlcpy(pendingNotificationText, hasText ? text : "",
+            sizeof(pendingNotificationText));
+    pendingNotificationRepeats = repeats;
     overlayActive = true;
     overlayState.startMillis = millis();
     overlayState.lastFrameMillis = 0;
@@ -1809,6 +1836,12 @@ void ClockWork::stopOverlay() {
     led.clear();
     G.prog = COMMAND_MODE_WORD_CLOCK;
     parametersChanged = true;
+    // A notification icon is followed by its text.
+    if (pendingNotificationText[0]) {
+        startNotificationText(pendingNotificationText,
+                              pendingNotificationRepeats);
+        pendingNotificationText[0] = '\0';
+    }
 }
 
 //------------------------------------------------------------------------------

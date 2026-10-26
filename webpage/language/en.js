@@ -614,10 +614,21 @@ let TRANSLATION_EN_US = {
 			"new-year": "Fireworks at midnight on New Year's Eve",
 			"help": "With learning colors you see at once which part of the sentence is the hour."
 		},
+		"notify": {
+			"h2": "Notifications (Home Assistant)",
+			"help": "This is how a notification from Home Assistant looks: first the icon, then the text scrolls three times, then the time again. It is skipped while a game, timer or mood is running.",
+			"icon-none": "No icon",
+			"icon-washer": "Washing machine",
+			"icon-bell": "Door bell",
+			"icon-mail": "Mail",
+			"icon-heart": "Heart",
+			"icon-star": "Star",
+			"test": "Try notification"
+		},
 		"more": {
 			"h2": "More ideas",
 			"overlays": "Day countdowns (\"NOCH 12 TAGE: FERIEN\") and the moon phase are set up under Display options → WordClock24h → Overlays.",
-			"mqtt": "Send notifications from Home Assistant (e.g. washing machine done) via MQTT to the topic \".../cmd\":"
+			"mqtt": "Details and ready-made Home Assistant automations are in docs/Home-Assistant.md in the repository. Short form via MQTT to the topic \".../cmd\":"
 		}
 	},
 	"about": {

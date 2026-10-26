@@ -8,9 +8,12 @@
 #include "WC24h/Games.h"
 #include "WC24h/NightTimer.h"
 #include "WC24h/Overlay.h"
+#include "WC24h/Text.h"
+#include "WC24h/Wc24hIcons.h"
 #include "WC24h/Wc24hDisplay.h"
 
 #include <cstdio>
+#include <cstring>
 #include <string>
 
 namespace {
@@ -483,7 +486,43 @@ void testAmbientAndCalendar() {
                "first quarter lit on the right");
 }
 
+void testIcons() {
+    expectGame(sizeof(wc24h::ICONS) / sizeof(wc24h::ICONS[0]) ==
+                   wc24h::ICON_COUNT,
+               "ICON_COUNT matches the icon table");
+    for (const wc24h::Icon &icon : wc24h::ICONS) {
+        expectGame(strlen(icon.colors) ==
+                       static_cast<size_t>(icon.rows) * icon.cols,
+                   icon.name);
+    }
+}
+
+void testNotificationText() {
+    expectGame(wc24h::findIcon("Waschmaschine") == wc24h::findIcon("washer") &&
+                   wc24h::findIcon("Washer") >= 0,
+               "washer icon by German alias");
+    expectGame(wc24h::findIcon("0") == 0 && wc24h::findIcon("99") == -1,
+               "icon by number");
+    expectGame(wc24h::findIcon("Unbekannt") == -1, "unknown icon");
+
+    char out[32];
+    wc24h::toClockText("W\xC3\xA4sche fertig \xE2\x9C\x93!", out, sizeof out);
+    expectGame(strcmp(out, "Waesche fertig !") == 0, "umlauts and emoji");
+
+    char icon[16];
+    const char *text = nullptr;
+    wc24h::splitNotification(" [Waschmaschine] FERTIG", icon, sizeof icon,
+                             &text);
+    expectGame(strcmp(icon, "Waschmaschine") == 0 && strcmp(text, "FERTIG") == 0,
+               "split icon and text");
+    wc24h::splitNotification("NUR TEXT", icon, sizeof icon, &text);
+    expectGame(icon[0] == '\0' && strcmp(text, "NUR TEXT") == 0,
+               "text without icon");
+}
+
 int main() {
+    testNotificationText();
+    testIcons();
     testAmbientAndCalendar();
     testArcadeSmoke();
     testArcadeRules();

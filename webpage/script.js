@@ -118,6 +118,7 @@ const CMD = {
 	SET_DIGITAL_CLOCK: 114,
 	SET_ALARMS: 115,
 	SET_WORD_COLORS: 116,
+	SHOW_NOTIFICATION: 117,
 	SPEED: 152,
 
 	// Requests
@@ -2312,6 +2313,11 @@ function sendAlarms() {
 
 function initExtras() {
 	renderAlarms([]);
+	document.getElementById("notify-test").addEventListener("click", () => {
+		const text = toClockText(document.getElementById("notify-text").value).substring(0, DATA_SCROLLINGTEXT_LENGTH);
+		sendCmd(CMD.SHOW_NOTIFICATION, nstr(Number(document.getElementById("notify-icon").value)) + nstr(3) +
+			getPaddedString(text, DATA_SCROLLINGTEXT_LENGTH));
+	});
 	document.getElementById("alarm-save").addEventListener("click", sendAlarms);
 	document.querySelectorAll(".word-color-option").forEach(el => {
 		el.addEventListener("change", () => {

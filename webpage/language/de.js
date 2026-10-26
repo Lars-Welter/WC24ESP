@@ -614,10 +614,21 @@ let TRANSLATION_DE_DE = {
 			"new-year": "Feuerwerk an Silvester um Mitternacht",
 			"help": "Mit den Lern-Farben sieht man sofort, welcher Teil des Satzes die Stunde ist."
 		},
+		"notify": {
+			"h2": "Hinweise (Home Assistant)",
+			"help": "So sieht ein Hinweis aus Home Assistant aus: erst das Symbol, dann der Text dreimal als Laufschrift, danach wieder die Uhrzeit. Läuft gerade ein Spiel, ein Timer oder eine Stimmung, wird der Hinweis übersprungen.",
+			"icon-none": "Kein Symbol",
+			"icon-washer": "Waschmaschine",
+			"icon-bell": "Klingel",
+			"icon-mail": "Post",
+			"icon-heart": "Herz",
+			"icon-star": "Stern",
+			"test": "Hinweis testen"
+		},
 		"more": {
 			"h2": "Weitere Ideen",
 			"overlays": "Tage-Countdown („NOCH 12 TAGE: FERIEN“) und die Mondphase richtest du unter Anzeigeoptionen → WordClock24h → Einblendungen ein.",
-			"mqtt": "Hinweise aus Home Assistant (z. B. Waschmaschine fertig) per MQTT an das Thema „…/cmd“ schicken:"
+			"mqtt": "Mehr dazu und fertige Automationen für Home Assistant stehen in docs/Home-Assistant.md im Repository. Kurzform per MQTT an das Thema „…/cmd“:"
 		}
 	},
 	"about": {

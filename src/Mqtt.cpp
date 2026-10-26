@@ -8,6 +8,8 @@
 
 #include "Led.h"
 #include "WebPageAdapter.h"
+#include "WC24h/Text.h"
+#include "WC24h/Wc24hIcons.h"
 #include <ArduinoJson.h>
 #include <PubSubClient.h>
 #include <WiFiClient.h>
@@ -471,6 +473,8 @@ void Mqtt::init() {
     mqttClient.subscribe(
         (std::string(G.mqtt.topic) + "/scrolltext/set").c_str());
     delay(50);
+    mqttClient.subscribe((std::string(G.mqtt.topic) + "/notify/set").c_str());
+    delay(50);
     mqttClient.subscribe(
         (std::string(G.mqtt.topic) + "/effect_speed/set").c_str());
     delay(50);
@@ -731,6 +735,19 @@ void Mqtt::callback(char *topic, byte *payload, unsigned int length) {
         return;
     }
 
+    // Plain text from the Home Assistant notify entity, optionally with an
+    // icon in front: "[Waschmaschine] WASCHMASCHINE FERTIG"
+    if (topicStr == baseTopic + "/notify/set") {
+        char iconName[24];
+        const char *text = nullptr;
+        wc24h::splitNotification(msg, iconName, sizeof(iconName), &text);
+        if (mqttInstance) {
+            mqttInstance->clockWork.showNotification(wc24h::findIcon(iconName),
+                                                     text);
+        }
+        return;
+    }
+
     // Remaining command topics use JSON payloads.
     StaticJsonDocument<512> doc;
     DeserializationError error = deserializeJson(doc, msg);
@@ -747,12 +764,20 @@ void Mqtt::callback(char *topic, byte *payload, unsigned int length) {
         processScrollingText(doc);
         processColor(doc);
         processBrightness(doc);
-        // {"notify_icon": 0..7} or {"notify_text": "WASCHMASCHINE FERTIG"}
+        // {"notify_text": "WASCHMASCHINE FERTIG", "notify_icon": "Washer",
+        //  "notify_repeat": 3}, the icon also as index, see wc24h::findIcon
         if (doc.containsKey("notify_icon") || doc.containsKey("notify_text")) {
+            int16_t icon = -1;
+            JsonVariantConst iconValue = doc["notify_icon"];
+            if (iconValue.is<int>()) {
+                icon = iconValue.as<int>();
+            } else if (iconValue.is<const char *>()) {
+                icon = wc24h::findIcon(iconValue.as<const char *>());
+            }
             if (mqttInstance) {
                 mqttInstance->clockWork.showNotification(
-                    doc["notify_icon"] | -1,
-                    doc["notify_text"] | "");
+                    icon, doc["notify_text"] | "",
+                    doc["notify_repeat"] | 3);
             }
         }
     } else if (topicStr == baseTopic + "/scrolltext/set") {
@@ -1107,6 +1132,17 @@ void Mqtt::sendDiscovery() {
         speed["min"] = 0;
         speed["max"] = 10;
         speed["step"] = 1;
+    }
+
+    // Notifications ("Waschmaschine fertig"): use notify.send_message with
+    // an optional icon in brackets, e.g. "[Waschmaschine] FERTIG".
+    {
+        JsonObject notify = cmps.createNestedObject("notify");
+        notify["p"] = "notify";
+        notify["uniq_id"] = unique_id + "_notify";
+        notify["name"] = "Notification";
+        notify["ic"] = "mdi:message-alert";
+        notify["cmd_t"] = base + "/notify/set";
     }
 
     // Diagnostic sensors, all read from the shared diagnostics topic.

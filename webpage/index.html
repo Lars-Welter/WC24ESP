@@ -796,11 +796,27 @@
                 </div>
 
                 <div class="box">
+                    <h2 data-i18next="extras.notify.h2"></h2>
+                    <p class="hint" data-i18next="extras.notify.help"></p>
+                    <form class="pure-form message-form" onsubmit="return false">
+                        <select id="notify-icon" aria-label="icon">
+                            <option value="999" data-i18next="extras.notify.icon-none"></option>
+                            <option value="8" data-i18next="extras.notify.icon-washer" selected></option>
+                            <option value="9" data-i18next="extras.notify.icon-bell"></option>
+                            <option value="10" data-i18next="extras.notify.icon-mail"></option>
+                            <option value="0" data-i18next="extras.notify.icon-heart"></option>
+                            <option value="7" data-i18next="extras.notify.icon-star"></option>
+                        </select>
+                        <input type="text" id="notify-text" maxlength="30" value="WASCHMASCHINE FERTIG">
+                        <button type="submit" class="pure-button pure-button-primary" id="notify-test" data-i18next="extras.notify.test"></button>
+                    </form>
+                </div>
+
+                <div class="box">
                     <h2 data-i18next="extras.more.h2"></h2>
                     <p data-i18next="extras.more.overlays"></p>
                     <p data-i18next="extras.more.mqtt"></p>
-                    <pre class="code">{"notify_text": "WASCHMASCHINE FERTIG"}
-{"notify_icon": 0}</pre>
+                    <pre class="code">{"notify_icon": "Waschmaschine", "notify_text": "WASCHMASCHINE FERTIG"}</pre>
                 </div>
             </section>
 

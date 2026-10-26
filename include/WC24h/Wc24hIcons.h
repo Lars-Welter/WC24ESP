@@ -223,6 +223,45 @@ static const Icon ICONS[] = {
      "0400000440000040"
      "0000000440000000",
      nullptr, nullptr},
+    // Added for Home Assistant notifications.
+    {"Washer", 12, 12,
+     "777777777777"
+     "730020000007"
+     "777777777777"
+     "700099990007"
+     "700944449007"
+     "709444444907"
+     "709446644907"
+     "709444444907"
+     "700944449007"
+     "700099990007"
+     "777777777777"
+     "770000000077",
+     nullptr, nullptr},
+    {"Bell", 12, 12,
+     "000003300000"
+     "000033330000"
+     "000333333000"
+     "003333333300"
+     "003333333300"
+     "003333333300"
+     "033333333330"
+     "033333333330"
+     "333333333333"
+     "000000000000"
+     "000033330000"
+     "000003300000",
+     nullptr, nullptr},
+    {"Mail", 8, 12,
+     "777777777777"
+     "770000000077"
+     "707000000707"
+     "700700007007"
+     "700077770007"
+     "700000000007"
+     "700000000007"
+     "777777777777",
+     nullptr, nullptr},
 };
 
 // Named after the OpenWeatherMap icon codes without the day/night suffix.
@@ -391,7 +430,56 @@ static const Icon WEATHER_ICONS[] = {
      nullptr, nullptr},
 };
 
-constexpr uint8_t ICON_COUNT = 8;
+constexpr uint8_t ICON_COUNT = 11;
 constexpr uint8_t WEATHER_ICON_COUNT = 9;
+
+// Icon by its index ("8"), name ("Washer") or a German alias
+// ("Waschmaschine"), ignoring case. Returns -1 when unknown.
+inline int16_t findIcon(const char *name) {
+    if (!name || !*name) {
+        return -1;
+    }
+    if (name[0] >= '0' && name[0] <= '9') {
+        int16_t index = 0;
+        for (const char *p = name; *p >= '0' && *p <= '9'; p++) {
+            index = index * 10 + (*p - '0');
+        }
+        return index < ICON_COUNT ? index : -1;
+    }
+    struct Alias {
+        const char *alias;
+        const char *name;
+    };
+    static const Alias ALIASES[] = {
+        {"Waschmaschine", "Washer"}, {"Waesche", "Washer"},
+        {"Klingel", "Bell"},         {"Tuer", "Bell"},
+        {"Tuerklingel", "Bell"},     {"Post", "Mail"},
+        {"Brief", "Mail"},           {"Herz", "Heart"},
+        {"Stern", "Blue Star"},      {"Feuerwerk", "Fireworks"},
+        {"Tannenbaum", "Xmas Tree"},
+    };
+    auto equals = [](const char *a, const char *b) {
+        for (; *a && *b; a++, b++) {
+            const char ca = (*a >= 'a' && *a <= 'z') ? *a - 32 : *a;
+            const char cb = (*b >= 'a' && *b <= 'z') ? *b - 32 : *b;
+            if (ca != cb) {
+                return false;
+            }
+        }
+        return *a == *b;
+    };
+    for (const Alias &alias : ALIASES) {
+        if (equals(name, alias.alias)) {
+            name = alias.name;
+            break;
+        }
+    }
+    for (int16_t i = 0; i < ICON_COUNT; i++) {
+        if (equals(name, ICONS[i].name)) {
+            return i;
+        }
+    }
+    return -1;
+}
 
 } // namespace wc24h

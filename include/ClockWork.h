@@ -100,7 +100,8 @@ private:
     void showOverlayWords(const bool *words);
 
 public:
-    void showNotification(int16_t icon, const char *text);
+    // Home Assistant notification: icon index (or -1) and/or text.
+    void showNotification(int16_t icon, const char *text, uint8_t repeats = 3);
     // ClockWork() = default;
     ~ClockWork() = default;
 

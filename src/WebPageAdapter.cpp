@@ -340,6 +340,27 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload,
 
             //------------------------------------------------------------------------------
 
+        case COMMAND_SHOW_NOTIFICATION: {
+            // "117" + icon (3 digits, 999 = none) + repeats (3 digits) +
+            // text (up to 30 characters), same as the Home Assistant
+            // notification
+            if (length < 9) {
+                break;
+            }
+            const uint32_t icon = split(payload, 3);
+            const uint32_t repeats = split(payload, 6);
+            char text[PAYLOAD_LENGTH] = "";
+            if (length > 9) {
+                payloadTextHandling(payload, text, 9);
+            }
+            showNotification(
+                icon < wc24h::ICON_COUNT ? static_cast<int16_t>(icon) : -1,
+                text, repeats);
+            break;
+        }
+
+            //------------------------------------------------------------------------------
+
         case COMMAND_REQUEST_HIGHSCORES: {
             // "210" + game (3 digits)
             G.client_nr = num;

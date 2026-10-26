@@ -161,6 +161,12 @@ void incrementPowerCycleCount() {
 
 //------------------------------------------------------------------------------
 
+void showNotification(int16_t icon, const char *text, uint8_t repeats) {
+    clockWork.showNotification(icon, text, repeats);
+}
+
+//------------------------------------------------------------------------------
+
 void sendMQTTUpdate() {
     // send status update via MQTT
     if ((G.mqtt.state) && (WiFi.status() == WL_CONNECTED)) {
