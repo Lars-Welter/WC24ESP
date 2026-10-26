@@ -44,6 +44,8 @@ verliert bei 4 A nur etwa 0,05 V und bleibt drin.
 
 ### Verdrahtung
 
+![SP803E-Anschlüsse](images/sp803e.jpg)
+
 ```
 Verpolungsschutz Ausgang +5 V ──► SP803E links VCC
 Verpolungsschutz Ausgang GND  ──► SP803E links GND

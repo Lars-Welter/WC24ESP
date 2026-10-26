@@ -61,7 +61,7 @@ kehrt zur Uhrzeit zurück. Treffer und Spielende vibrieren auf dem Handy.
 | Uhrzeit-Quiz | Uhrzeit in Worten lesen und an der Analoguhr einstellen, 10 Fragen | Regler Stunde/Minute, *Prüfen* |
 | Wörter finden | das gesuchte Wort in der Vorschau Buchstabe für Buchstabe antippen, 10 Wörter | Vorschau antippen |
 | Kopfrechnen | Aufgabe auf der Uhr lösen (+ − × :), 10 Aufgaben | Zifferntasten, *OK* |
-| Malbrett | Farbe wählen und in der Vorschau malen, auch mit dem Finger ziehen | Farbpalette, *Alles füllen*, *Löschen* |
+| Malbrett | Farbe wählen und in der Vorschau malen, auch mit dem Finger ziehen; das Bild bleibt erhalten, wenn man später zurückkommt | 40 Farben (kräftig, pastell, dunkel, Weiß- und Grautöne) und Radierer, Regler *Helligkeit*, *Alles füllen*, *Löschen* |
 
 Am PC: Pfeiltasten, Leertaste oder Enter (Aktion), P (Pause); beim
 Galgenmännchen die Buchstabentasten, bei *Farben merken* die Tasten 1–4.

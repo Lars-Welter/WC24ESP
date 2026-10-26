@@ -53,7 +53,7 @@ dreistellig mit führenden Nullen, Texte mit Leerzeichen aufgefüllt).
 
 | Nr. | Modus | Nutzdaten |
 | --- | --- | --- |
-| 1 | Wortuhr | Farbe (siehe Weboberfläche) |
+| 1 | Wordclock24 (Uhrzeit in Worten) | Farbe (siehe Weboberfläche) |
 | 2–8, 10 | Sekunden, Laufschrift, Regenbogen, Farbwechsel, Farbe, Digitaluhr, Symbol, Übergang | wie Multilayout-Firmware |
 | 11 | Spiel | Spiel-Nr. (3) + Spielername (bis 8 Zeichen) |
 | 12 | Timer | Aktion (3): 1 Countdown, 2 Stoppuhr, 3 Pause/Weiter, 4 Beenden; Sekunden (5) |
@@ -137,15 +137,18 @@ Phase (`wait`/`go`) und `foul`. `rank` > 0 bei neuem Rekord.
 | 5 | Aktion (fallen lassen, flattern, feuern, JETZT) | |
 | 6 | Pause (nur Einzelspiele) | |
 | 11–14 | Simon: rot, grün, blau, gelb | |
-| 20 | Malbrett: Feld setzen | Feld × 16 + Farbe |
+| 20 | Malbrett: Feld setzen | Feld × 64 + Farbe |
 | 21 | Malbrett: alles füllen | Farbe |
 | 22 | Malbrett: löschen | |
+| 23 | Malbrett: Helligkeit des Bildes | 5–100 (%) |
 | 30 | Antwort (Quiz `hh*100+mm`, Kopfrechnen Zahl) | Zahl |
 | 31 | Feld antippen (Wörter finden) | Zeile × 18 + Spalte |
 | 65–90 | Buchstabe A–Z (Galgenmännchen) | |
 
-Farben (Palette, `wc24h::Palette`): 0 aus, 1 rot, 2 orange, 3 gelb, 4 grün,
-5 cyan, 6 blau, 7 lila, 8 pink, 9 weiß (10–14 gedimmte Töne).
+Farben (`wc24h::Palette`, `paletteHsv()`): 0 aus, 1 rot, 2 orange, 3 gelb,
+4 grün, 5 cyan, 6 blau, 7 lila, 8 pink, 9 weiß, 10–14 gedimmte Töne. Für das
+Malbrett zusätzlich 15–26 zwölf Farbtöne kräftig, 27–38 pastell, 39–50
+dunkel, 51 warmweiß, 52 hellgrau, 53 dunkelgrau, 54 braun.
 
 ## Stimmungen und Wecker-Effekte
 

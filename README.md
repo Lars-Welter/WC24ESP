@@ -1,4 +1,4 @@
-# WC24ESP — WordClock 24h auf dem BTF-LIGHTING SP803E
+# WC24ESP — Wordclock24 auf dem BTF-LIGHTING SP803E
 
 Firmware für eine **WordClock 24h** (Layout 16 × 18 von
 [mikrocontroller.net](https://www.mikrocontroller.net/articles/WordClock_mit_WS2812)),
@@ -14,7 +14,7 @@ Nachtschaltung, Einblendungen (Overlays), die Animationen und die
 Tageslicht-Farbe — siehe [Funktionen der WordClock24h](#funktionen-der-wordclock24h).
 
 <p align="center">
-  <img src="docs/images/startseite-handy.png" alt="Startseite der Weboberfläche auf dem Handy mit Live-Vorschau der Wortuhr" width="300">
+  <img src="docs/images/startseite-handy.png" alt="Startseite der Weboberfläche auf dem Handy mit Live-Vorschau der Wordclock24" width="300">
 </p>
 
 ## Dokumentation
@@ -59,6 +59,8 @@ python3 tools/clock_type_gui.py     # Browser-GUI auf http://127.0.0.1:8765/
 ```
 
 ## Hardware: SP803E
+
+![BTF-LIGHTING SP803E: links GND/VCC für die Versorgung, rechts GND, PWM1–3, DATA (IO16) und VCC](docs/images/sp803e.jpg)
 
 | Anschluss / Pin | GPIO | Verwendung in dieser Firmware |
 | --- | --- | --- |

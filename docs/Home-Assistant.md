@@ -24,7 +24,7 @@ Im Folgenden steht `ESPWordclock` für das eingetragene Topic.
 
 | Entität | Typ | Zweck |
 | --- | --- | --- |
-| Word Clock | `light` | Ein/Aus, Helligkeit, Farbe, Effekt (Wortuhr, Digitaluhr, Laufschrift, Regenbogen …) |
+| Word Clock | `light` | Ein/Aus, Helligkeit, Farbe, Effekt (Wordclock24, Digitaluhr, Laufschrift, Regenbogen …) |
 | **Notification** | `notify` | Hinweis mit Symbol: erst das Symbol, dann der Text dreimal als Laufschrift, danach wieder die Uhrzeit |
 | Message | `notify` | setzt die Laufschrift und schaltet dauerhaft in den Laufschrift-Modus |
 | Scrolling Text | `text` | Text der Laufschrift |
@@ -125,7 +125,7 @@ actions:
 3. Zweite Automation – fertig, Hinweis auf der Uhr:
 
 ```yaml
-alias: Wortuhr – Waschmaschine fertig
+alias: Wordclock24 – Waschmaschine fertig
 triggers:
   - trigger: numeric_state
     entity_id: sensor.waschmaschine_leistung
@@ -187,7 +187,7 @@ actions:
 **Türklingel:**
 
 ```yaml
-alias: Wortuhr – Es klingelt
+alias: Wordclock24 – Es klingelt
 triggers:
   - trigger: state
     entity_id: binary_sensor.tuerklingel
@@ -203,7 +203,7 @@ actions:
 **Post im Briefkasten** (Kontaktsensor an der Klappe):
 
 ```yaml
-alias: Wortuhr – Post ist da
+alias: Wordclock24 – Post ist da
 triggers:
   - trigger: state
     entity_id: binary_sensor.briefkasten

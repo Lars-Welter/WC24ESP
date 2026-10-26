@@ -3,6 +3,21 @@
 Alle Änderungen dieser SP803E-Variante gegenüber der
 [Multilayout-ESP-Wordclock](https://github.com/ESPWortuhr/Multilayout-ESP-Wordclock) 4.4.1.
 
+## Wordclock24, Malbrett, Korrekturen
+
+* Name in Weboberfläche, App-Symbol und Home Assistant (Gerätemodell):
+  **Wordclock24** statt „Wortuhr".
+* **Malbrett**: 40 Farben (12 Farbtöne kräftig, pastell und dunkel,
+  Warmweiß, Grautöne, Braun) und Radierer, Regler für die Helligkeit des
+  Bildes. Die Palette ist zentral in `wc24h::paletteHsv()` definiert.
+* Korrektur: Farbänderungen (z. B. Hintergrundfarbe) oder ein Tippen nach
+  einem Spiel starteten wieder Tetris. Die Seite merkte sich den Spielmodus
+  und schickte ihn mit der Farbe; die Uhr las die Farbposition als
+  Spielnummer. Beides ist abgefangen.
+* Korrektur: Die Navigationsleiste unten rutschte auf dem iPhone SE
+  (Safari) mit dem Inhalt nach oben.
+* Foto des SP803E und aktuelle Bilder der Startseite in `docs/images/`.
+
 ## Home Assistant und Dokumentation
 
 * **Hinweise aus Home Assistant**: neue Entität *Notification* (`notify`).
