@@ -21,6 +21,8 @@ Mehr; das vollständige Menü öffnet sich über ☰ oben links.
 
 ## Start
 
+![Startseite der Weboberfläche](images/startseite-desktop.png)
+
 * **Live-Vorschau**: die 16 × 18 Buchstaben der Uhr in den Farben, in denen
   sie gerade leuchten — auch während Spielen und Stimmungen.
 * **Statuszeile**: aktueller Modus, WLAN-Qualität, Anzeige an/aus.

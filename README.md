@@ -13,6 +13,10 @@ sie ohne zusätzliche Hardware auf dem SP803E laufen: alle 27 Anzeigemodi,
 Nachtschaltung, Einblendungen (Overlays), die Animationen und die
 Tageslicht-Farbe — siehe [Funktionen der WordClock24h](#funktionen-der-wordclock24h).
 
+<p align="center">
+  <img src="docs/images/startseite-handy.png" alt="Startseite der Weboberfläche auf dem Handy mit Live-Vorschau der Wortuhr" width="300">
+</p>
+
 ## Dokumentation
 
 | Dokument | Inhalt |
