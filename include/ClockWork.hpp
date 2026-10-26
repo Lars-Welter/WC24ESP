@@ -308,11 +308,14 @@ void ClockWork::initLedStrip(uint8_t num) {
 #if defined(ESP32)
     pinMode(G.hardwarePins.led, OUTPUT);
 #endif
+    // I2S with DMA instead of RMT: on long chains (289 LEDs on the
+    // WordClock24h) WiFi interrupts delay the RMT refill, the strip latches
+    // mid-frame and stray letters light up in wrong colors.
     if (num == Grbw) {
-        activeLedStrip = new RgbwLedStripAdapter<NeoEsp32Rmt0Ws2812xMethod>(
+        activeLedStrip = new RgbwLedStripAdapter<NeoEsp32I2s1Ws2812xMethod>(
             ledCount, G.hardwarePins.led);
     } else {
-        activeLedStrip = new RgbLedStripAdapter<NeoEsp32Rmt0Ws2812xMethod>(
+        activeLedStrip = new RgbLedStripAdapter<NeoEsp32I2s1Ws2812xMethod>(
             ledCount, G.hardwarePins.led);
     }
 #endif
