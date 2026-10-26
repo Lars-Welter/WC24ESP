@@ -1001,3 +1001,78 @@ input:checked + .slider::before {
     padding-bottom: 0.5em;
     border-bottom: 1px solid #e5e5e5;
 }
+
+/* Games and timer */
+.game-select,
+.timer-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5em;
+}
+
+.game-status {
+    font-size: 1.2em;
+    min-height: 1.5em;
+}
+
+.gamepad {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(4.5em, 1fr));
+    grid-template-areas:
+        ".    up     pause"
+        "left action right"
+        ".    down   .";
+    gap: 0.6em;
+    max-width: 22em;
+    margin: 1em auto;
+}
+
+.gamepad .pad {
+    min-height: 4.5em;
+    font-size: 1.4em;
+    border: 1px solid var(--app-border-strong);
+    border-radius: var(--app-radius);
+    background: var(--app-surface-solid);
+    color: var(--app-text);
+    box-shadow: var(--app-shadow-soft);
+    touch-action: manipulation;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.gamepad .pad:active,
+.gamepad .pad.pressed {
+    background: var(--app-blue);
+    color: #fff;
+}
+
+.gamepad .pad-up { grid-area: up; }
+.gamepad .pad-left { grid-area: left; }
+
+.gamepad .pad-action {
+    grid-area: action;
+    font-size: 1em;
+}
+.gamepad .pad-right { grid-area: right; }
+.gamepad .pad-down { grid-area: down; }
+
+.gamepad .pad-pause {
+    grid-area: pause;
+    font-size: 0.9em;
+}
+
+.game-hint {
+    color: var(--app-text-muted);
+    font-size: 0.9em;
+}
+
+.timer-display {
+    font-size: 3em;
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+    margin: 0.2em 0 0.4em;
+}
+
+.timer-display.finished {
+    color: #c62828;
+}

@@ -278,8 +278,32 @@ struct GLOBAL {
     NightTimer nightTimers[MAX_NIGHT_TIMERS];
     wc24h::Overlay overlays[wc24h::MAX_OVERLAYS];
     uint8_t colorAnimation;
+
+    // Appended later; EEPROM data from older firmware holds garbage here
+    // until extrasMagic is set, see initExtraSettings().
+    uint16_t extrasMagic;
+    uint8_t digitalClockFlags;
+    uint8_t bootSpeed;
 };
 extern GLOBAL G;
+
+constexpr uint16_t EXTRAS_MAGIC = 0xD1C5;
+
+// G.digitalClockFlags, 0 keeps the original look.
+constexpr uint8_t DIGITAL_SEPARATOR_MASK = 0x03;
+constexpr uint8_t DIGITAL_SEPARATOR_BLINK = 0x00;
+constexpr uint8_t DIGITAL_SEPARATOR_STEADY = 0x01;
+constexpr uint8_t DIGITAL_SEPARATOR_OFF = 0x02;
+constexpr uint8_t DIGITAL_12_HOURS = 0x04;
+constexpr uint8_t DIGITAL_NO_LEADING_ZERO = 0x08;
+constexpr uint8_t DIGITAL_SECONDS_BAR = 0x10;
+constexpr uint8_t DIGITAL_CENTERED = 0x20;
+constexpr uint8_t DIGITAL_FLAGS_MASK = 0x3F;
+
+// G.bootSpeed: 1 (slow) .. 10 (fast); 6 matches the old fixed timing.
+constexpr uint8_t BOOT_SPEED_MIN = 1;
+constexpr uint8_t BOOT_SPEED_MAX = 10;
+constexpr uint8_t BOOT_SPEED_DEFAULT = 6;
 
 // Brightness related variables
 extern float ledGain;
@@ -292,6 +316,15 @@ extern uint8_t _minute;
 extern uint8_t _hour;
 extern uint8_t lastSecond;
 extern uint8_t lastMinute;
+
+// Requests from the web page for games and the timer, picked up by
+// ClockWork::loop(). Kept out of G so the EEPROM layout stays the same.
+constexpr uint8_t GAME_KEY_QUEUE_SIZE = 8;
+extern uint8_t gameRequest;
+extern uint8_t gameKeyQueue[GAME_KEY_QUEUE_SIZE];
+extern uint8_t gameKeyCount;
+extern uint8_t timerRequest;
+extern uint32_t timerRequestSeconds;
 
 extern uint32_t frontMatrix[MAX_ROW_SIZE];
 extern uint32_t lastFrontMatrix[MAX_ROW_SIZE];
@@ -358,6 +391,8 @@ enum CommandWords : uint8_t {
     COMMAND_MODE_DIGITAL_CLOCK = 7,
     COMMAND_MODE_SYMBOL = 8,
     COMMAND_MODE_TRANSITION = 10,
+    COMMAND_MODE_GAME = 11,
+    COMMAND_MODE_TIMER = 12,
 
     PLACEHOLDER_MAX_MODE = 19,
 
@@ -394,6 +429,8 @@ enum CommandWords : uint8_t {
     COMMAND_SET_NIGHT_TIMERS = 110,
     COMMAND_SET_OVERLAYS = 111,
     COMMAND_SET_COLOR_ANIMATION = 112,
+    COMMAND_GAME_INPUT = 113,
+    COMMAND_SET_DIGITAL_CLOCK = 114,
 
     COMMAND_SPEED = 152,
 

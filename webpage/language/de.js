@@ -282,7 +282,20 @@ let TRANSLATION_DE_DE = {
 			"blink-leds": "LEDs kurz aufblitzen lassen",
 			"iterate-leds": "Alle LEDs einmal durchlaufen lassen",
 			"wifi-symbol": "WiFi-Symbol während der Netzwerk-Suche anzeigen",
-			"ip-address": "IP-Adresse anzeigen"
+			"ip-address": "IP-Adresse anzeigen",
+			"speed": "Geschwindigkeit (1 = langsam, 10 = schnell)"
+		},
+		"digital-clock": {
+			"h2": "Digitaluhr",
+			"help": "Aussehen der Digitaluhr (Funktionen → Digitaluhr)",
+			"separator": "Doppelpunkt",
+			"separator-blink": "Blinkend",
+			"separator-steady": "Dauerhaft",
+			"separator-off": "Aus",
+			"12h": "12-Stunden-Anzeige",
+			"leading-zero": "Führende Null (07:30 statt 7:30)",
+			"seconds-bar": "Sekundenbalken zwischen den Zeilen",
+			"centered": "Ziffern zentriert statt versetzt"
 		}
 	},
 
@@ -428,6 +441,30 @@ let TRANSLATION_DE_DE = {
 			"save": "Einstellungen Speichern",
 			"discovery": "Sende HA Discovery"
 		}
+	},
+	"games": {
+		"h1": "Spiele & Timer",
+		"play": "Spielen",
+		"tetris": "Tetris",
+		"snake": "Snake",
+		"quit": "Zurück zur Uhr",
+		"score": "Punkte:",
+		"lines-level": "Reihen {{lines}} · Level {{level}}",
+		"length": "Länge {{length}}",
+		"over": "Spiel vorbei",
+		"paused": "Pause",
+		"drop": "Fallen",
+		"pause": "Pause",
+		"hint": "Tetris: ▲ dreht, ◀ ▶ schieben, ▼ schneller, „Fallen“ lässt den Stein fallen. Snake: mit den Pfeilen lenken. Am PC gehen auch die Pfeiltasten, Leertaste und P. Tipp: Seite mit #games am Ende als Lesezeichen oder über „Zum Startbildschirm“ als App ablegen."
+	},
+	"timer": {
+		"h2": "Countdown & Stoppuhr",
+		"minutes": "Minuten",
+		"seconds": "Sekunden",
+		"countdown": "Countdown starten",
+		"stopwatch": "Stoppuhr starten",
+		"pause": "Pause / Weiter",
+		"stop": "Beenden"
 	},
 	"about": {
 		"h1": "Über",

@@ -366,6 +366,22 @@ void ensureWc24hSettings() {
 }
 
 //------------------------------------------------------------------------------
+// Settings appended to G after the WordClock24h port (digital clock look,
+// boot animation speed). Older EEPROM contents leave garbage in them.
+
+void ensureExtraSettings() {
+    if (G.extrasMagic == EXTRAS_MAGIC &&
+        (G.digitalClockFlags & ~DIGITAL_FLAGS_MASK) == 0 &&
+        G.bootSpeed >= BOOT_SPEED_MIN && G.bootSpeed <= BOOT_SPEED_MAX) {
+        return;
+    }
+    G.extrasMagic = EXTRAS_MAGIC;
+    G.digitalClockFlags = DIGITAL_SEPARATOR_BLINK;
+    G.bootSpeed = BOOT_SPEED_DEFAULT;
+    eeprom::write();
+}
+
+//------------------------------------------------------------------------------
 
 void ensureI2CPins() {
     if (i2cBus::pinsAreValid(G.i2cSdaPin, G.i2cSclPin)) {
@@ -401,6 +417,7 @@ void setup() {
     ensureI2CPins();
     ensureTimezone();
     ensureWc24hSettings();
+    ensureExtraSettings();
 
     //-------------------------------------
 
@@ -558,6 +575,8 @@ void setup() {
         setDefaultHardwarePins();
         i2cBus::setDefaultPins(G.i2cSdaPin, G.i2cSclPin);
         setDefaultWc24hSettings();
+        G.extrasMagic = 0;
+        ensureExtraSettings();
 
         eeprom::write();
         Serial.println("EEPROM written");
@@ -602,12 +621,14 @@ void setup() {
 
     Serial.println("LED Init");
     clockWork.initLedStrip(G.Colortype);
+    // Boot speed 1..10: the sweep takes 40 ms per LED at 1 and 4 ms at 10
+    // (20 ms at the default 6), the blink stays on 1 s .. 100 ms.
     if (G.bootLedBlink) {
         clockWork.initBootLedBlink();
-        delay(20);
+        delay((BOOT_SPEED_MAX + 1 - G.bootSpeed) * 100);
     }
     if (G.bootLedSweep) {
-        clockWork.initBootLedSweep(20);
+        clockWork.initBootLedSweep(44 - 4 * G.bootSpeed);
     }
     clockWork.initBootLed();
 

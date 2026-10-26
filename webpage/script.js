@@ -76,6 +76,8 @@ const CMD = {
 	MODE_DIGITAL_CLOCK: 7,
 	MODE_SYMBOL: 8,
 	MODE_TRANSITION: 10,
+	MODE_GAME: 11,
+	MODE_TIMER: 12,
 
 	// Settings
 	SET_INITIAL_VALUES: 20,
@@ -110,6 +112,8 @@ const CMD = {
 	SET_NIGHT_TIMERS: 110,
 	SET_OVERLAYS: 111,
 	SET_COLOR_ANIMATION: 112,
+	GAME_INPUT: 113,
+	SET_DIGITAL_CLOCK: 114,
 	SPEED: 152,
 
 	// Requests
@@ -339,6 +343,14 @@ function initWebsocket() {
 		debugMessage(`WebSocket response arrived (command ${data.command}).`, data);
 
 		switch (data.command) {
+			case "game": {
+				renderGameStatus(data);
+				break;
+			}
+			case "timer": {
+				renderTimerStatus(data);
+				break;
+			}
 			case "mqtt": {
 				document.getElementById("mqtt-port").value = data.MQTT_Port;
 				const mqttServer = document.getElementById("mqtt-server");
@@ -423,6 +435,13 @@ function initWebsocket() {
 				document.getElementById("boot-show-led-sweep").checked = data.bootLedSweep;
 				document.getElementById("boot-show-wifi").checked = data.bootShowWifi;
 				document.getElementById("boot-show-ip").checked = data.bootShowIP;
+				if (data.bootSpeed !== undefined) {
+					document.getElementById("boot-speed").value = data.bootSpeed;
+					document.getElementById("boot-speed-value").textContent = data.bootSpeed;
+				}
+				if (data.digitalClockFlags !== undefined) {
+					setDigitalClockOptions(data.digitalClockFlags);
+				}
 
 				if (modeColorForm) {
 					modeColorForm.style.gridTemplateColumns = data.hasSecondsFrame ? "1fr 1fr 1fr" : "1fr 1fr";
@@ -1356,15 +1375,27 @@ document.addEventListener("DOMContentLoaded", function() {
 		});
 	}
 
-	document.querySelectorAll("[id*='boot-show']").forEach(el => {
+	document.querySelectorAll("[id*='boot-show'], #boot-speed").forEach(el => {
 		el.addEventListener("change", function() {
 			let blink = document.getElementById("boot-show-led-blink").checked ? 1 : 0;
 			let sweep = document.getElementById("boot-show-led-sweep").checked ? 1 : 0;
 			let wifi = document.getElementById("boot-show-wifi").checked ? 1 : 0;
 			let ip = document.getElementById("boot-show-ip").checked ? 1 : 0;
+			let speed = document.getElementById("boot-speed").value;
 
-			sendCmd(CMD.SET_BOOT, nstr(blink) + nstr(sweep) + nstr(wifi) + nstr(ip));
+			sendCmd(CMD.SET_BOOT, nstr(blink) + nstr(sweep) + nstr(wifi) + nstr(ip) + nstr(speed));
 			debugMessage(`Bootoption${debugMessageReconfigured}`);
+		});
+	});
+	const bootSpeed = document.getElementById("boot-speed");
+	bootSpeed.addEventListener("input", () => {
+		document.getElementById("boot-speed-value").textContent = bootSpeed.value;
+	});
+
+	document.querySelectorAll(".digital-option").forEach(el => {
+		el.addEventListener("change", () => {
+			sendCmd(CMD.SET_DIGITAL_CLOCK, nstr(getDigitalClockFlags()));
+			debugMessage(`Digital clock${debugMessageReconfigured}`);
 		});
 	});
 
@@ -1523,4 +1554,150 @@ document.addEventListener("DOMContentLoaded", function() {
 			debugMessage(`whitetype${debugMessageReconfigured}`);
 		});
 	});
+	initGamesAndTimer();
 });
+
+/*
+ * Games (Tetris, Snake) and timer (countdown, stopwatch)
+ */
+const GAME_TETRIS = 1;
+const GAME_SNAKE = 2;
+const GAME_KEY = { LEFT: 1, RIGHT: 2, UP: 3, DOWN: 4, ACTION: 5, PAUSE: 6 };
+const GAME_REPEAT_DELAY_MS = 220;
+const GAME_REPEAT_INTERVAL_MS = 90;
+const TIMER_ACTION = { COUNTDOWN: 1, STOPWATCH: 2, PAUSE: 3, STOP: 4 };
+
+function sendGameKey(key) {
+	sendCmd(CMD.GAME_INPUT, nstr(key));
+}
+
+function formatTimer(seconds) {
+	const mm = Math.floor(seconds / 60).toString().padStart(2, "0");
+	const ss = (seconds % 60).toString().padStart(2, "0");
+	return `${mm}:${ss}`;
+}
+
+function renderGameStatus(data) {
+	document.getElementById("game-score").textContent = data.score;
+	let extra = "";
+	if (data.game === GAME_TETRIS) {
+		extra = i18next.t("games.lines-level", { lines: data.lines, level: data.level });
+	} else if (data.game === GAME_SNAKE) {
+		extra = i18next.t("games.length", { length: data.length });
+	}
+	document.getElementById("game-extra").textContent = extra;
+	let state = "";
+	if (data.over) {
+		state = i18next.t("games.over");
+	} else if (data.paused) {
+		state = i18next.t("games.paused");
+	}
+	document.getElementById("game-state").textContent = state;
+}
+
+function renderTimerStatus(data) {
+	const display = document.getElementById("timer-display");
+	display.textContent = formatTimer(data.seconds);
+	display.classList.toggle("finished", Boolean(data.finished));
+}
+
+function initGamesAndTimer() {
+	document.querySelectorAll(".game-start").forEach(btn => {
+		btn.addEventListener("click", () => {
+			sendCmd(CMD.MODE_GAME, nstr(Number(btn.dataset.game)));
+		});
+	});
+	document.querySelectorAll(".game-quit").forEach(btn => {
+		btn.addEventListener("click", () => sendColorData(CMD.MODE_WORD_CLOCK));
+	});
+
+	// Touch / mouse pads; arrows and "down" repeat while held.
+	document.querySelectorAll(".gamepad .pad").forEach(pad => {
+		let delayTimer = null;
+		let repeatTimer = null;
+		const key = Number(pad.dataset.key);
+		const stop = () => {
+			clearTimeout(delayTimer);
+			clearInterval(repeatTimer);
+			delayTimer = null;
+			repeatTimer = null;
+			pad.classList.remove("pressed");
+		};
+		pad.addEventListener("pointerdown", event => {
+			event.preventDefault();
+			pad.setPointerCapture(event.pointerId);
+			pad.classList.add("pressed");
+			sendGameKey(key);
+			if (pad.dataset.repeat === "1") {
+				delayTimer = setTimeout(() => {
+					repeatTimer = setInterval(() => sendGameKey(key), GAME_REPEAT_INTERVAL_MS);
+				}, GAME_REPEAT_DELAY_MS);
+			}
+		});
+		["pointerup", "pointercancel", "lostpointercapture"].forEach(type => pad.addEventListener(type, stop));
+		pad.addEventListener("contextmenu", event => event.preventDefault());
+	});
+
+	// Keyboard while the games page is open.
+	const KEY_MAP = new Map([
+		["ArrowLeft", GAME_KEY.LEFT],
+		["ArrowRight", GAME_KEY.RIGHT],
+		["ArrowUp", GAME_KEY.UP],
+		["ArrowDown", GAME_KEY.DOWN],
+		[" ", GAME_KEY.ACTION],
+		["p", GAME_KEY.PAUSE],
+		["P", GAME_KEY.PAUSE]
+	]);
+	document.addEventListener("keydown", event => {
+		const section = document.querySelector(".section-games");
+		if (!section || section.style.display !== "block" || event.target.tagName === "INPUT") {
+			return;
+		}
+		const key = KEY_MAP.get(event.key);
+		if (key) {
+			event.preventDefault();
+			sendGameKey(key);
+		}
+	});
+
+	const sendTimer = (action, seconds = 0) => sendCmd(CMD.MODE_TIMER, nstr(action) + nstr5(seconds));
+	document.getElementById("timer-countdown").addEventListener("click", () => {
+		const minutes = Math.min(99, Math.max(0, Number(document.getElementById("timer-minutes").value) || 0));
+		const seconds = Math.min(59, Math.max(0, Number(document.getElementById("timer-seconds").value) || 0));
+		const total = minutes * 60 + seconds;
+		if (total > 0) {
+			sendTimer(TIMER_ACTION.COUNTDOWN, total);
+		}
+	});
+	document.getElementById("timer-stopwatch").addEventListener("click", () => sendTimer(TIMER_ACTION.STOPWATCH));
+	document.getElementById("timer-pause").addEventListener("click", () => sendTimer(TIMER_ACTION.PAUSE));
+	document.getElementById("timer-stop").addEventListener("click", () => sendTimer(TIMER_ACTION.STOP));
+
+	// Opening the page with #games (e.g. from a home screen icon) goes straight to the games.
+	if (location.hash === "#games") {
+		const link = document.querySelector(".pure-menu-link[data-navigation='games']");
+		if (link) link.click();
+	}
+}
+
+/*
+ * Digital clock options, see DIGITAL_* in WordClockState.h
+ */
+const DIGITAL = { SEPARATOR_MASK: 0x03, H12: 0x04, NO_LEADING_ZERO: 0x08, SECONDS_BAR: 0x10, CENTERED: 0x20 };
+
+function getDigitalClockFlags() {
+	let flags = Number(document.getElementById("digital-separator").value) & DIGITAL.SEPARATOR_MASK;
+	if (document.getElementById("digital-12h").checked) flags |= DIGITAL.H12;
+	if (!document.getElementById("digital-leading-zero").checked) flags |= DIGITAL.NO_LEADING_ZERO;
+	if (document.getElementById("digital-seconds-bar").checked) flags |= DIGITAL.SECONDS_BAR;
+	if (document.getElementById("digital-centered").checked) flags |= DIGITAL.CENTERED;
+	return flags;
+}
+
+function setDigitalClockOptions(flags) {
+	document.getElementById("digital-separator").value = flags & DIGITAL.SEPARATOR_MASK;
+	document.getElementById("digital-12h").checked = Boolean(flags & DIGITAL.H12);
+	document.getElementById("digital-leading-zero").checked = !(flags & DIGITAL.NO_LEADING_ZERO);
+	document.getElementById("digital-seconds-bar").checked = Boolean(flags & DIGITAL.SECONDS_BAR);
+	document.getElementById("digital-centered").checked = Boolean(flags & DIGITAL.CENTERED);
+}

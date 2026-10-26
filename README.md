@@ -134,7 +134,8 @@ ESP8266):
 | DS18xx-Sensor, LDR-Helligkeitsregelung | nicht möglich: keine freien Pins (GPIO 36 belegt das Mikrofon) |
 | DFPlayer (Sprachausgabe, Gong, Wecker) | nicht möglich: keine Audio-Hardware |
 | Ambilight (zweiter LED-Streifen) | nicht portiert — der SP803E hat nur einen Datenausgang |
-| TFT-Displays, Touch, Tetris/Snake-Spiel | nicht übertragbar |
+| Tetris und Snake (Steuerung per App) | neu geschrieben, gesteuert über *Spiele & Timer* in der Weboberfläche |
+| TFT-Displays, Touch | nicht übertragbar |
 | Wetter als Laufschrift, Wettervorhersage, Android-App (UDP) | nicht portiert |
 
 Hinweise zur Portierung:
@@ -150,6 +151,22 @@ Hinweise zur Portierung:
   12. Februar). Die Portierung rechnet korrekt.
 * Die Tageslicht-Farbe überschreibt laufend die Vordergrundfarbe; zum
   Zurückkehren zur eigenen Farbe die Farbanimation ausschalten.
+
+## Zusätzliche Funktionen
+
+* **Spiele & Timer** (eigener Menüpunkt der Weboberfläche): Tetris und Snake
+  auf der Buchstabenmatrix, gesteuert über ein Steuerkreuz auf dem Handy oder
+  die Pfeiltasten am PC (Leertaste lässt fallen, P pausiert). Dazu Countdown
+  (bis 99:59, blinkt am Ende) und Stoppuhr, beide als MM:SS. Nach Spielende
+  oder „Beenden" kehrt die Uhr zur Uhrzeit zurück.
+  `http://<Uhr>/#games` öffnet die Seite direkt; über „Zum Startbildschirm
+  hinzufügen" liegt sie auf dem Handy wie eine App.
+* **Digitaluhr** (*Anzeigeoptionen → Digitaluhr*): Doppelpunkt blinkend,
+  dauerhaft oder aus, 12-/24-Stunden-Anzeige, führende Null abschaltbar,
+  Sekundenbalken zwischen den Ziffernzeilen, Ziffern zentriert statt versetzt.
+* **Boot** (*Anzeigeoptionen → Boot*): Geschwindigkeit 1–10 für das
+  Aufblitzen und den LED-Durchlauf beim Start (6 entspricht dem bisherigen
+  Tempo).
 
 ## Voreinstellungen dieser Variante
 

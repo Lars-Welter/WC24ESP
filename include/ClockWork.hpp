@@ -5,6 +5,7 @@
 #include "SensitiveData.h"
 #include "TransitionTypes/Transition.h"
 #include "WC24h/CurrentWeather.h"
+#include "WC24h/Games.h"
 #include "WC24h/NightTimer.h"
 #include "WC24h/Overlay.h"
 #include "WC24h/Wc24hDisplay.h"
@@ -1888,6 +1889,340 @@ void ClockWork::clearClockByProgInit() {
 }
 
 //------------------------------------------------------------------------------
+// Games and timer (Tetris, Snake, countdown, stopwatch)
+//------------------------------------------------------------------------------
+
+namespace {
+
+wc24h::Tetris tetris;
+wc24h::Snake snake;
+wc24h::CountTimer countTimer;
+
+uint8_t activeGame = wc24h::GAME_NONE;
+bool gamePaused = false;
+bool gameNeedsDraw = false;
+uint32_t gameLastStepMillis = 0;
+uint32_t gameOverMillis = 0;
+uint32_t gameReportedScore = UINT32_MAX;
+bool gameReportedOver = false;
+bool gameReportedPaused = false;
+
+uint32_t timerShownSeconds = UINT32_MAX;
+uint32_t timerFinishedMillis = 0;
+bool timerReportedRunning = false;
+
+constexpr uint32_t GAME_OVER_SHOW_MS = 4000;
+constexpr uint32_t TIMER_ALARM_MS = 15000;
+
+// Usual Tetris colors for I, J, L, O, S, T, Z.
+const float TETRIS_HUES[wc24h::TETRIS_PIECES] = {0.50f, 0.66f, 0.08f, 0.16f,
+                                                 0.33f, 0.80f, 0.00f};
+
+// Digital clock with the 12/24 hour and leading zero options applied.
+void showDigitalTime() {
+    uint8_t hour = _hour;
+    if (G.digitalClockFlags & DIGITAL_12_HOURS) {
+        hour %= 12;
+        if (hour == 0) {
+            hour = 12;
+        }
+    }
+    const char tens = (hour < 10 && (G.digitalClockFlags &
+                                     DIGITAL_NO_LEADING_ZERO))
+                          ? ' '
+                          : hour / 10;
+    led.showDigitalClock(_minute % 10, _minute / 10, hour % 10, tens);
+}
+
+float gameBrightness() {
+    if (!led.getState()) {
+        return 0.f; // switched off by the power key or a night timer
+    }
+    const float b = led.getColorbyPositionWithAppliedBrightness(Foreground).B;
+    return b < 0.08f ? 0.08f : b;
+}
+
+void returnToWordClock() {
+    activeGame = wc24h::GAME_NONE;
+    countTimer.stop();
+    G.prog = COMMAND_MODE_WORD_CLOCK;
+    G.progInit = true;
+    parametersChanged = true;
+}
+
+void broadcastJson(const JsonDocument &doc) {
+    String payload;
+    serializeJson(doc, payload);
+    webSocket.broadcastTXT(payload);
+}
+
+void reportGame(bool force = false) {
+    const bool over = activeGame == wc24h::GAME_TETRIS ? tetris.over
+                                                       : snake.over;
+    const uint32_t score =
+        activeGame == wc24h::GAME_TETRIS ? tetris.score : snake.score;
+    if (!force && score == gameReportedScore && over == gameReportedOver &&
+        gamePaused == gameReportedPaused) {
+        return;
+    }
+    gameReportedScore = score;
+    gameReportedOver = over;
+    gameReportedPaused = gamePaused;
+
+    StaticJsonDocument<192> doc;
+    doc["command"] = "game";
+    doc["game"] = activeGame;
+    doc["score"] = score;
+    doc["over"] = over;
+    doc["paused"] = gamePaused;
+    if (activeGame == wc24h::GAME_TETRIS) {
+        doc["lines"] = tetris.lines;
+        doc["level"] = tetris.level();
+    } else {
+        doc["length"] = snake.length;
+    }
+    broadcastJson(doc);
+}
+
+void reportTimer(uint32_t seconds) {
+    StaticJsonDocument<128> doc;
+    doc["command"] = "timer";
+    doc["mode"] = countTimer.mode;
+    doc["running"] = countTimer.running;
+    doc["seconds"] = seconds;
+    doc["finished"] = timerFinishedMillis != 0;
+    broadcastJson(doc);
+}
+
+void drawTetris() {
+    const float bri = gameBrightness();
+    const HsbColor wall(0.f, 0.f, bri * 0.25f);
+    const HsbColor off(0.f, 0.f, 0.f);
+    for (uint8_t row = 0; row < wc24h::GAME_ROWS; row++) {
+        for (uint8_t col = 0; col < wc24h::GAME_COLS; col++) {
+            // The front matrix counts columns from the right.
+            const uint8_t ledCol = wc24h::GAME_COLS - 1 - col;
+            if (col == wc24h::TETRIS_OFFSET - 1 ||
+                col == wc24h::TETRIS_OFFSET + wc24h::TETRIS_COLS) {
+                led.setPixel(row, ledCol, wall);
+                continue;
+            }
+            if (col < wc24h::TETRIS_OFFSET ||
+                col >= wc24h::TETRIS_OFFSET + wc24h::TETRIS_COLS) {
+                led.setPixel(row, ledCol, off);
+                continue;
+            }
+            const uint8_t cell = tetris.cell(row, col - wc24h::TETRIS_OFFSET);
+            led.setPixel(row, ledCol,
+                         cell ? HsbColor(TETRIS_HUES[cell - 1], 1.f, bri)
+                              : off);
+        }
+    }
+    led.show();
+}
+
+void drawSnake() {
+    const float bri = gameBrightness();
+    const HsbColor off(0.f, 0.f, 0.f);
+    for (uint8_t row = 0; row < wc24h::GAME_ROWS; row++) {
+        for (uint8_t col = 0; col < wc24h::GAME_COLS; col++) {
+            led.setPixel(row, wc24h::GAME_COLS - 1 - col, off);
+        }
+    }
+    const uint16_t food = snake.food;
+    led.setPixel(food / wc24h::GAME_COLS,
+                 wc24h::GAME_COLS - 1 - food % wc24h::GAME_COLS,
+                 HsbColor(0.f, 1.f, bri));
+    for (uint16_t i = snake.length; i-- > 0;) {
+        const uint16_t c = snake.segment(i);
+        // Bright head, body fading slightly towards the tail.
+        const HsbColor color = i == 0 ? HsbColor(0.25f, 1.f, bri)
+                                      : HsbColor(0.33f, 1.f, bri * 0.6f);
+        led.setPixel(c / wc24h::GAME_COLS,
+                     wc24h::GAME_COLS - 1 - c % wc24h::GAME_COLS, color);
+    }
+    led.show();
+}
+
+void drawGame() {
+    if (activeGame == wc24h::GAME_TETRIS) {
+        drawTetris();
+    } else {
+        drawSnake();
+    }
+}
+
+void startGame(uint8_t game) {
+    activeGame = game == wc24h::GAME_SNAKE ? wc24h::GAME_SNAKE
+                                           : wc24h::GAME_TETRIS;
+    const uint32_t seed = esp_random();
+    if (activeGame == wc24h::GAME_TETRIS) {
+        tetris.start(seed);
+    } else {
+        snake.start(seed);
+    }
+    gamePaused = false;
+    gameOverMillis = 0;
+    gameLastStepMillis = millis();
+    gameKeyCount = 0;
+    gameNeedsDraw = true;
+    reportGame(true);
+}
+
+void loopGame() {
+    const uint32_t now = millis();
+
+    if (gameRequest != wc24h::GAME_NONE) {
+        startGame(gameRequest);
+        gameRequest = wc24h::GAME_NONE;
+    }
+    if (activeGame == wc24h::GAME_NONE) {
+        startGame(wc24h::GAME_TETRIS);
+    }
+
+    const bool over =
+        activeGame == wc24h::GAME_TETRIS ? tetris.over : snake.over;
+
+    for (uint8_t i = 0; i < gameKeyCount; i++) {
+        const uint8_t key = gameKeyQueue[i];
+        if (over) {
+            continue;
+        }
+        if (key == wc24h::GAME_KEY_PAUSE) {
+            gamePaused = !gamePaused;
+            gameLastStepMillis = now;
+            continue;
+        }
+        if (gamePaused) {
+            continue;
+        }
+        if (activeGame == wc24h::GAME_TETRIS) {
+            tetris.input(key);
+        } else {
+            snake.input(key);
+        }
+        gameNeedsDraw = true;
+    }
+    gameKeyCount = 0;
+
+    if (!over && !gamePaused) {
+        const uint16_t interval = activeGame == wc24h::GAME_TETRIS
+                                      ? tetris.intervalMs()
+                                      : snake.intervalMs();
+        if (now - gameLastStepMillis >= interval) {
+            gameLastStepMillis = now;
+            if (activeGame == wc24h::GAME_TETRIS) {
+                tetris.step();
+            } else {
+                snake.step();
+            }
+            gameNeedsDraw = true;
+        }
+    }
+
+    const bool nowOver =
+        activeGame == wc24h::GAME_TETRIS ? tetris.over : snake.over;
+    if (nowOver) {
+        if (gameOverMillis == 0) {
+            gameOverMillis = now;
+        }
+        // Blink the final board, then go back to the clock.
+        const bool visible = ((now - gameOverMillis) / 300) % 2 == 0;
+        static bool lastVisible = true;
+        if (visible != lastVisible || gameNeedsDraw) {
+            lastVisible = visible;
+            if (visible) {
+                drawGame();
+            } else {
+                led.clear();
+                led.show();
+            }
+            gameNeedsDraw = false;
+        }
+        reportGame();
+        if (now - gameOverMillis >= GAME_OVER_SHOW_MS) {
+            returnToWordClock();
+        }
+        return;
+    }
+
+    if (gameNeedsDraw) {
+        drawGame();
+        gameNeedsDraw = false;
+    }
+    reportGame();
+}
+
+void loopTimer() {
+    const uint32_t now = millis();
+
+    switch (timerRequest) {
+    case wc24h::TIMER_ACTION_COUNTDOWN:
+        countTimer.startCountdown(timerRequestSeconds, now);
+        break;
+    case wc24h::TIMER_ACTION_STOPWATCH:
+        countTimer.startStopwatch(now);
+        break;
+    case wc24h::TIMER_ACTION_PAUSE:
+        countTimer.togglePause(now);
+        break;
+    case wc24h::TIMER_ACTION_STOP:
+        timerRequest = wc24h::TIMER_ACTION_NONE;
+        timerFinishedMillis = 0;
+        reportTimer(0);
+        returnToWordClock();
+        return;
+    default:
+        break;
+    }
+    if (timerRequest != wc24h::TIMER_ACTION_NONE) {
+        timerRequest = wc24h::TIMER_ACTION_NONE;
+        timerFinishedMillis = 0;
+        timerShownSeconds = UINT32_MAX;
+    }
+    if (countTimer.mode == wc24h::TIMER_OFF) {
+        returnToWordClock();
+        return;
+    }
+
+    if (countTimer.finished(now)) {
+        if (timerFinishedMillis == 0) {
+            timerFinishedMillis = now;
+            reportTimer(0);
+        }
+        // Flash 00:00 until the alarm time is over.
+        const uint32_t phase = (now - timerFinishedMillis) / 400;
+        if (phase != timerShownSeconds) {
+            timerShownSeconds = phase;
+            if (phase % 2 == 0) {
+                led.showDigitalClock(0, 0, 0, 0, false);
+            } else {
+                led.clear();
+                led.show();
+            }
+        }
+        if (now - timerFinishedMillis >= TIMER_ALARM_MS) {
+            timerFinishedMillis = 0;
+            returnToWordClock();
+        }
+        return;
+    }
+
+    const uint32_t seconds = countTimer.displaySeconds(now);
+    if (seconds != timerShownSeconds ||
+        countTimer.running != timerReportedRunning) {
+        timerShownSeconds = seconds;
+        timerReportedRunning = countTimer.running;
+        const uint8_t mm = seconds / 60;
+        const uint8_t ss = seconds % 60;
+        led.showDigitalClock(ss % 10, ss / 10, mm % 10, mm / 10, false);
+        reportTimer(seconds);
+    }
+}
+
+} // namespace
+
+//------------------------------------------------------------------------------
 // Loop Functions
 //------------------------------------------------------------------------------
 
@@ -1935,8 +2270,7 @@ void ClockWork::loop(struct tm &tm) {
 
         if (G.prog == COMMAND_MODE_DIGITAL_CLOCK) {
             led.clear();
-            led.showDigitalClock(_minute % 10, _minute / 10, _hour % 10,
-                                 _hour / 10);
+            showDigitalTime();
         }
 
         lastSecond = _second;
@@ -1999,7 +2333,7 @@ void ClockWork::loop(struct tm &tm) {
     }
 
     case COMMAND_REQUEST_CONFIG_VALUES: {
-        DynamicJsonDocument config(1280);
+        DynamicJsonDocument config(1408);
         config["command"] = "config";
         config["ssid"] = network.getSSID();
         config["timeserver"] = G.timeserver;
@@ -2046,6 +2380,8 @@ void ClockWork::loop(struct tm &tm) {
         config["bootLedSweep"] = G.bootLedSweep;
         config["bootShowWifi"] = G.bootShowWifi;
         config["bootShowIP"] = G.bootShowIP;
+        config["bootSpeed"] = G.bootSpeed;
+        config["digitalClockFlags"] = G.digitalClockFlags;
         config["ledPin"] = G.hardwarePins.led;
         config["powerButtonPin"] = G.hardwarePins.powerButton;
         config["modeButtonPin"] = G.hardwarePins.modeButton;
@@ -2225,7 +2561,8 @@ void ClockWork::loop(struct tm &tm) {
     case COMMAND_SET_WC24H_DISPLAY_MODE:
     case COMMAND_SET_NIGHT_TIMERS:
     case COMMAND_SET_OVERLAYS:
-    case COMMAND_SET_COLOR_ANIMATION: {
+    case COMMAND_SET_COLOR_ANIMATION:
+    case COMMAND_SET_DIGITAL_CLOCK: {
         eeprom::write();
         parametersChanged = true;
         break;
@@ -2418,8 +2755,7 @@ void ClockWork::loop(struct tm &tm) {
             clearClockByProgInit();
         }
         if (parametersChanged) {
-            led.showDigitalClock(_minute % 10, _minute / 10, _hour % 10,
-                                 _hour / 10);
+            showDigitalTime();
             parametersChanged = false;
         }
         break;
@@ -2474,6 +2810,24 @@ void ClockWork::loop(struct tm &tm) {
             led.show();
             parametersChanged = false;
         }
+        break;
+    }
+
+    case COMMAND_MODE_GAME: {
+        if (G.progInit) {
+            clearClockByProgInit();
+            gameNeedsDraw = true;
+        }
+        loopGame();
+        break;
+    }
+
+    case COMMAND_MODE_TIMER: {
+        if (G.progInit) {
+            clearClockByProgInit();
+            timerShownSeconds = UINT32_MAX;
+        }
+        loopTimer();
         break;
     }
 

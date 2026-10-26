@@ -635,6 +635,19 @@ void Led::setupDigitalClock(fontSize &usedFontSize, uint8_t &offsetLetterH0,
                        pgm_read_byte(&(fontWidth[usedFontSize])) -
                        letterSpacing;
 
+    // Centered: both rows of digits share the same columns.
+    if (G.digitalClockFlags & DIGITAL_CENTERED) {
+        const uint8_t width = pgm_read_byte(&(fontWidth[usedFontSize]));
+        const uint8_t total = 2 * width + letterSpacing;
+        const uint8_t start = usedClockType->colsWordMatrix() > total
+                                  ? (usedClockType->colsWordMatrix() - total) / 2
+                                  : 0;
+        offsetLetterH0 = start;
+        offsetLetterH1 = start + width + letterSpacing;
+        offsetLetterMin0 = start;
+        offsetLetterMin1 = start + width + letterSpacing;
+    }
+
     // 1st Row of letters horizontal Offset
     offsetRow0 = 0;
     // 2nd Row of letters horizontal Offset
@@ -644,10 +657,49 @@ void Led::setupDigitalClock(fontSize &usedFontSize, uint8_t &offsetLetterH0,
 
 //------------------------------------------------------------------------------
 
+// Seconds as a bar in the free rows between hours and minutes. Returns
+// false when the layout has no room for it.
+bool Led::drawDigitalClockSecondsBar(const fontSize &usedFontSize) {
+    const uint8_t height = pgm_read_byte(&(fontHeight[usedFontSize]));
+    if (usedClockType->rowsWordMatrix() < 2 * height + 2) {
+        return false;
+    }
+    const uint8_t cols = usedClockType->colsWordMatrix();
+    const uint8_t row = (usedClockType->rowsWordMatrix() - 2) / 2;
+    const uint8_t lit = (_second + 1) * cols / 60;
+    for (uint8_t col = 0; col < lit; col++) {
+        usedClockType->setFrontMatrixPixel(row, col);
+        usedClockType->setFrontMatrixPixel(row + 1, col);
+    }
+    return true;
+}
+
+//------------------------------------------------------------------------------
+
 void Led::toggleDigitalClockSecond(const fontSize &usedFontSize,
                                    const uint8_t &offsetRow1,
-                                   const uint8_t &offsetMin0) {
-    if (!(_second % 2)) {
+                                   const uint8_t &offsetMin0,
+                                   bool secondsBarShown) {
+    const uint8_t separator = G.digitalClockFlags & DIGITAL_SEPARATOR_MASK;
+    if (separator == DIGITAL_SEPARATOR_OFF ||
+        (separator == DIGITAL_SEPARATOR_BLINK && !(_second % 2))) {
+        return;
+    }
+
+    // Centered digits leave no gap beside the minutes; use a dot in the
+    // middle between both rows instead, unless the seconds bar sits there.
+    if (G.digitalClockFlags & DIGITAL_CENTERED) {
+        const uint8_t height = pgm_read_byte(&(fontHeight[usedFontSize]));
+        if (secondsBarShown ||
+            usedClockType->rowsWordMatrix() < 2 * height + 2) {
+            return;
+        }
+        const uint8_t row = (usedClockType->rowsWordMatrix() - 2) / 2;
+        const uint8_t col = usedClockType->colsWordMatrix() / 2 - 1;
+        usedClockType->setFrontMatrixPixel(row, col);
+        usedClockType->setFrontMatrixPixel(row, col + 1);
+        usedClockType->setFrontMatrixPixel(row + 1, col);
+        usedClockType->setFrontMatrixPixel(row + 1, col + 1);
         return;
     }
 
@@ -669,7 +721,7 @@ void Led::toggleDigitalClockSecond(const fontSize &usedFontSize,
 //------------------------------------------------------------------------------
 
 void Led::showDigitalClock(const char min1, const char min0, const char h1,
-                           const char h0) {
+                           const char h0, bool secondsBar) {
 
     uint8_t offsetLetterH0, offsetLetterH1, offsetLetterMin0, offsetLetterMin1,
         offsetRow0, offsetRow1;
@@ -686,7 +738,11 @@ void Led::showDigitalClock(const char min1, const char min0, const char h1,
                       offsetLetterMin0, offsetLetterMin1, offsetRow0,
                       offsetRow1);
 
-    toggleDigitalClockSecond(usedFontSize, offsetRow1, offsetLetterMin0);
+    const bool secondsBarShown = secondsBar &&
+                                 (G.digitalClockFlags & DIGITAL_SECONDS_BAR) &&
+                                 drawDigitalClockSecondsBar(usedFontSize);
+    toggleDigitalClockSecond(usedFontSize, offsetRow1, offsetLetterMin0,
+                             secondsBarShown);
 
     bool showHours = true;
     bool showMinutes = true;
@@ -711,8 +767,12 @@ void Led::showDigitalClock(const char min1, const char min0, const char h1,
             if (showHours) {
                 setPixelForChar(col, row, offsetLetterH1, offsetRow0,
                                 static_cast<unsigned char>(h1), usedFontSize);
-                setPixelForChar(col, row, offsetLetterH0, offsetRow0,
-                                static_cast<unsigned char>(h0), usedFontSize);
+                // ' ' is blank in the 7x5 font but not in the small one.
+                if (h0 != ' ' || usedFontSize == normalSizeASCII) {
+                    setPixelForChar(col, row, offsetLetterH0, offsetRow0,
+                                    static_cast<unsigned char>(h0),
+                                    usedFontSize);
+                }
             }
             // 2nd Row: Minutes
             if (showMinutes) {

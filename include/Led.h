@@ -18,7 +18,9 @@ private:
                            uint8_t &offsetRow1);
     void toggleDigitalClockSecond(const fontSize &usedFontSize,
                                   const uint8_t &offsetRow1,
-                                  const uint8_t &offsetMin0);
+                                  const uint8_t &offsetMin0,
+                                  bool secondsBarShown);
+    bool drawDigitalClockSecondsBar(const fontSize &usedFontSize);
 
 public:
     Led(/* args */) = default;
@@ -87,7 +89,9 @@ public:
     // Show Functions
     //------------------------------------------------------------------------------
     void showNumbers(const char d1, const char d2);
+    // h0 / min0 are the tens; pass ' ' as h0 to leave the digit blank.
+    // secondsBar = false hides the optional seconds bar (e.g. for the timer).
     void showDigitalClock(const char min1, const char min0, const char h1,
-                          const char h0);
+                          const char h0, bool secondsBar = true);
     void show();
 };

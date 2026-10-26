@@ -4,6 +4,11 @@
     <title data-i18next="title">ESPWordClock</title>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <!-- "Add to home screen" opens the page full screen like an app -->
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="Wortuhr">
+    <meta name="theme-color" content="#303944">
 
     <!-- stylesheets -->
     <link rel="stylesheet" href="./pure-min.css">
@@ -122,6 +127,7 @@
             <ul class="pure-menu-list">
                 <li class="pure-menu-item" role="none"><a href="#" class="pure-menu-link" role="menuitem" data-navigation="main" data-i18next="colors.h1"></a></li>
                 <li class="pure-menu-item" role="none"><a href="#" class="pure-menu-link" role="menuitem" data-navigation="functions" data-i18next="functions.h1"></a></li>
+                <li class="pure-menu-item" role="none"><a href="#" class="pure-menu-link" role="menuitem" data-navigation="games" data-i18next="games.h1"></a></li>
                 <li class="pure-menu-item" role="none"><a href="#" class="pure-menu-link" role="menuitem" data-navigation="frontoptions" data-i18next="view.h1"></a></li>
                 <li class="pure-menu-item" role="none"><a href="#" class="pure-menu-link" role="menuitem" data-navigation="settings" data-i18next="settings.h1"></a></li>
                 <li class="pure-menu-item" role="none"><a href="#" class="pure-menu-link" role="menuitem" data-navigation="smart-home" data-i18next="smart-home.h1"></a></li>
@@ -540,6 +546,57 @@
 
             </section>
 
+            <section class="pure-u-24-24 section section-games">
+                <header class="header">
+                    <img src="./icons/games.svg" class="icon" alt="icon" aria-hidden="true">
+                    <h1 data-i18next="games.h1"></h1>
+                </header>
+
+                <div class="box">
+                    <h2 data-i18next="games.play"></h2>
+                    <div class="game-select">
+                        <button type="button" class="pure-button game-start" data-game="1" data-i18next="games.tetris"></button>
+                        <button type="button" class="pure-button game-start" data-game="2" data-i18next="games.snake"></button>
+                        <button type="button" class="pure-button game-quit" data-i18next="games.quit"></button>
+                    </div>
+                    <p class="game-status" aria-live="polite">
+                        <span data-i18next="games.score"></span> <strong id="game-score">0</strong>
+                        <span id="game-extra"></span>
+                        <strong id="game-state"></strong>
+                    </p>
+                    <div class="gamepad">
+                        <button type="button" class="pad pad-up" data-key="3" data-repeat="0" aria-label="up">&#9650;</button>
+                        <button type="button" class="pad pad-left" data-key="1" data-repeat="1" aria-label="left">&#9664;</button>
+                        <button type="button" class="pad pad-action" data-key="5" data-repeat="0" data-i18next="games.drop"></button>
+                        <button type="button" class="pad pad-right" data-key="2" data-repeat="1" aria-label="right">&#9654;</button>
+                        <button type="button" class="pad pad-down" data-key="4" data-repeat="1" aria-label="down">&#9660;</button>
+                        <button type="button" class="pad pad-pause" data-key="6" data-repeat="0" data-i18next="games.pause"></button>
+                    </div>
+                    <p class="game-hint" data-i18next="games.hint"></p>
+                </div>
+
+                <div class="box">
+                    <h2 data-i18next="timer.h2"></h2>
+                    <div class="timer-display" id="timer-display">00:00</div>
+                    <form class="pure-form pure-form-aligned" onsubmit="return false">
+                        <div class="pure-control-group">
+                            <label for="timer-minutes" data-i18next="timer.minutes"></label>
+                            <input id="timer-minutes" type="number" min="0" max="99" value="5">
+                        </div>
+                        <div class="pure-control-group">
+                            <label for="timer-seconds" data-i18next="timer.seconds"></label>
+                            <input id="timer-seconds" type="number" min="0" max="59" value="0">
+                        </div>
+                    </form>
+                    <div class="timer-buttons">
+                        <button type="button" class="pure-button pure-button-primary" id="timer-countdown" data-i18next="timer.countdown"></button>
+                        <button type="button" class="pure-button" id="timer-stopwatch" data-i18next="timer.stopwatch"></button>
+                        <button type="button" class="pure-button" id="timer-pause" data-i18next="timer.pause"></button>
+                        <button type="button" class="pure-button" id="timer-stop" data-i18next="timer.stop"></button>
+                    </div>
+                </div>
+            </section>
+
             <section class="pure-u-24-24 section section-frontoptions">
                 <header class="header">
                     <img src="./icons/eye.svg" class="icon" alt="icon" aria-hidden="true">
@@ -730,6 +787,51 @@
                 <!-- Specific UHR169 End-->
 
                 <div class="box">
+                    <h2 data-i18next="view.digital-clock.h2"></h2>
+                    <form class="pure-form pure-form-aligned">
+                        <fieldset>
+                            <legend data-i18next="view.digital-clock.help"></legend>
+                            <div class="pure-control-group">
+                                <label for="digital-separator" data-i18next="view.digital-clock.separator"></label>
+                                <select id="digital-separator" class="digital-option">
+                                    <option value="0" data-i18next="view.digital-clock.separator-blink"></option>
+                                    <option value="1" data-i18next="view.digital-clock.separator-steady"></option>
+                                    <option value="2" data-i18next="view.digital-clock.separator-off"></option>
+                                </select>
+                            </div>
+                            <div class="pure-control-group">
+                                <label for="digital-12h" class="pure-checkbox" data-i18next="view.digital-clock.12h"></label>
+                                <label class="switch">
+                                    <input type="checkbox" id="digital-12h" class="digital-option">
+                                    <span class="slider round"></span>
+                                </label>
+                            </div>
+                            <div class="pure-control-group">
+                                <label for="digital-leading-zero" class="pure-checkbox" data-i18next="view.digital-clock.leading-zero"></label>
+                                <label class="switch">
+                                    <input type="checkbox" id="digital-leading-zero" class="digital-option" checked>
+                                    <span class="slider round"></span>
+                                </label>
+                            </div>
+                            <div class="pure-control-group">
+                                <label for="digital-seconds-bar" class="pure-checkbox" data-i18next="view.digital-clock.seconds-bar"></label>
+                                <label class="switch">
+                                    <input type="checkbox" id="digital-seconds-bar" class="digital-option">
+                                    <span class="slider round"></span>
+                                </label>
+                            </div>
+                            <div class="pure-control-group">
+                                <label for="digital-centered" class="pure-checkbox" data-i18next="view.digital-clock.centered"></label>
+                                <label class="switch">
+                                    <input type="checkbox" id="digital-centered" class="digital-option">
+                                    <span class="slider round"></span>
+                                </label>
+                            </div>
+                        </fieldset>
+                    </form>
+                </div>
+
+                <div class="box">
                     <h2 data-i18next="view.boot.h2"></h2>
                     <form class="pure-form pure-form-aligned">
                         <fieldset>
@@ -761,6 +863,11 @@
                                     <input type="checkbox" id="boot-show-ip">
                                     <span class="slider round"></span>
                                 </label>
+                            </div>
+                            <div class="pure-control-group">
+                                <label for="boot-speed" data-i18next="view.boot.speed"></label>
+                                <input type="range" id="boot-speed" min="1" max="10" step="1" value="6">
+                                <span id="boot-speed-value">6</span>
                             </div>
                         </fieldset>
                     </form>

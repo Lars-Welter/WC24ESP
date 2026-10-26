@@ -2,6 +2,7 @@
 //   g++ -std=gnu++11 -Wall -Wextra -Werror -Iinclude test/wc24h_test.cpp
 //   ./a.out
 
+#include "WC24h/Games.h"
 #include "WC24h/NightTimer.h"
 #include "WC24h/Overlay.h"
 #include "WC24h/Wc24hDisplay.h"
@@ -227,7 +228,94 @@ void testOverlaySelection() {
 
 } // namespace
 
+void expectGame(bool ok, const char *what) {
+    if (!ok) {
+        printf("FAIL games: %s\n", what);
+        failures++;
+    }
+}
+
+void testTetris() {
+    wc24h::Tetris t;
+    t.start(42);
+    expectGame(!t.over && t.score == 0 && t.level() == 1, "fresh game");
+    expectGame(t.intervalMs() == 600, "level 1 gravity");
+
+    // Walls stop sideways moves.
+    for (uint8_t i = 0; i < 20; i++) {
+        t.move(-1);
+    }
+    expectGame(!t.move(-1), "left wall blocks");
+
+    // A filled bottom row except for one gap is cleared by an I piece.
+    t.start(1);
+    for (uint8_t col = 0; col < wc24h::TETRIS_COLS - 4; col++) {
+        t.board[wc24h::TETRIS_ROWS - 1][col] = 1;
+    }
+    t.piece = 0; // I, horizontal in row 1 of its 4x4 box
+    t.rotation = 0;
+    t.x = wc24h::TETRIS_COLS - 4;
+    t.y = 0;
+    t.hardDrop();
+    bool bottomEmpty = true;
+    for (uint8_t col = 0; col < wc24h::TETRIS_COLS; col++) {
+        bottomEmpty &= t.board[wc24h::TETRIS_ROWS - 1][col] == 0;
+    }
+    expectGame(bottomEmpty && t.lines == 1, "full row cleared");
+    expectGame(t.score >= 40, "line scores points");
+
+    // Stacking pieces to the top ends the game.
+    t.start(7);
+    for (uint16_t i = 0; i < 200 && !t.over; i++) {
+        t.hardDrop();
+    }
+    expectGame(t.over, "stack to the top ends the game");
+}
+
+void testSnake() {
+    wc24h::Snake s;
+    s.start(3);
+    expectGame(s.length == 3 && !s.over, "fresh snake");
+    expectGame(!s.occupies(s.food), "food not on the snake");
+
+    // Reversing into itself is ignored.
+    s.input(wc24h::GAME_KEY_LEFT);
+    expectGame(s.nextDirection == wc24h::GAME_KEY_RIGHT, "no reverse");
+
+    // Eating grows the snake.
+    const uint16_t ahead = s.segment(0) + 1;
+    s.food = ahead;
+    expectGame(s.step() && s.length == 4 && s.score == 10, "eat and grow");
+
+    // Running into the right wall ends the game.
+    for (uint8_t i = 0; i < wc24h::GAME_COLS && !s.over; i++) {
+        s.food = 0;
+        s.step();
+    }
+    expectGame(s.over && !s.won, "wall ends the game");
+}
+
+void testCountTimer() {
+    wc24h::CountTimer t;
+    t.startCountdown(90, 1000);
+    expectGame(t.displaySeconds(1000) == 90, "countdown start");
+    expectGame(t.displaySeconds(1500) == 90, "countdown rounds up");
+    expectGame(t.displaySeconds(61000) == 30, "countdown after 60 s");
+    t.togglePause(61000);
+    expectGame(t.displaySeconds(200000) == 30, "pause holds the time");
+    t.togglePause(200000);
+    expectGame(!t.finished(229000) && t.finished(230000), "countdown ends");
+    expectGame(t.displaySeconds(500000) == 0, "countdown stays at zero");
+
+    t.startStopwatch(0);
+    expectGame(t.displaySeconds(125400) == 125, "stopwatch counts up");
+    expectGame(!t.finished(9999999), "stopwatch never finishes");
+}
+
 int main() {
+    testTetris();
+    testSnake();
+    testCountTimer();
     testNightTimers();
     testCalendar();
     testOverlaySelection();

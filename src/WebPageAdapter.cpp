@@ -1,5 +1,6 @@
 #include "WebPageAdapter.h"
 
+#include "WC24h/Games.h"
 #include "WC24h/NightTimer.h"
 #include "WC24h/Overlay.h"
 #include "WC24h/Wc24hDisplay.h"
@@ -207,6 +208,45 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload,
             parseColor(payload, length);
             break;
         }
+            //------------------------------------------------------------------------------
+
+        case COMMAND_MODE_GAME: {
+            // "011" + game (3 digits): 1 = Tetris, 2 = Snake
+            const uint32_t game =
+                length >= 6 ? split(payload, 3) : wc24h::GAME_TETRIS;
+            gameRequest = game == wc24h::GAME_SNAKE ? wc24h::GAME_SNAKE
+                                                    : wc24h::GAME_TETRIS;
+            if (G.prog != command) {
+                G.progInit = true;
+            }
+            break;
+        }
+
+            //------------------------------------------------------------------------------
+
+        case COMMAND_MODE_TIMER: {
+            // "012" + action (3 digits) + seconds (5 digits)
+            if (length < 6) {
+                break;
+            }
+            timerRequest = split(payload, 3);
+            timerRequestSeconds = length >= 11 ? split(payload, 6, 5) : 0;
+            if (G.prog != command) {
+                G.progInit = true;
+            }
+            break;
+        }
+
+            //------------------------------------------------------------------------------
+
+        case COMMAND_GAME_INPUT: {
+            // "113" + key (3 digits), see wc24h::GameKey
+            if (length >= 6 && gameKeyCount < GAME_KEY_QUEUE_SIZE) {
+                gameKeyQueue[gameKeyCount++] = split(payload, 3);
+            }
+            break;
+        }
+
             //------------------------------------------------------------------------------
 
         case COMMAND_MODE_TRANSITION: {
@@ -622,6 +662,27 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload,
             G.bootLedSweep = split(payload, 6);
             G.bootShowWifi = split(payload, 9);
             G.bootShowIP = split(payload, 12);
+            if (length >= 18) {
+                const uint32_t speed = split(payload, 15);
+                if (speed >= BOOT_SPEED_MIN && speed <= BOOT_SPEED_MAX) {
+                    G.bootSpeed = speed;
+                }
+            }
+            break;
+        }
+
+            //------------------------------------------------------------------------------
+
+        case COMMAND_SET_DIGITAL_CLOCK: {
+            // "114" + flags (3 digits), see DIGITAL_* in WordClockState.h
+            if (length >= 6) {
+                const uint32_t flags = split(payload, 3);
+                if ((flags & ~DIGITAL_FLAGS_MASK) == 0 &&
+                    (flags & DIGITAL_SEPARATOR_MASK) <= DIGITAL_SEPARATOR_OFF) {
+                    G.digitalClockFlags = flags;
+                    parametersChanged = true;
+                }
+            }
             break;
         }
             //------------------------------------------------------------------------------

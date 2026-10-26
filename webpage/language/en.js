@@ -282,7 +282,20 @@ let TRANSLATION_EN_US = {
 			"blink-leds": "Blink All LEDs at the Same Time",
 			"iterate-leds": "Iterate All LEDs One by One",
 			"wifi-symbol": "Show the WiFi Symbol While Searching For a Network",
-			"ip-address": "Show IP Address"
+			"ip-address": "Show IP Address",
+			"speed": "Speed (1 = slow, 10 = fast)"
+		},
+		"digital-clock": {
+			"h2": "Digital clock",
+			"help": "Look of the digital clock (Functions → Digital clock)",
+			"separator": "Colon",
+			"separator-blink": "Blinking",
+			"separator-steady": "Steady",
+			"separator-off": "Off",
+			"12h": "12-hour format",
+			"leading-zero": "Leading zero (07:30 instead of 7:30)",
+			"seconds-bar": "Seconds bar between the rows",
+			"centered": "Centered digits instead of offset"
 		}
 	},
 
@@ -428,6 +441,30 @@ let TRANSLATION_EN_US = {
 			"save": "Save Settings",
 			"discovery": "Send HA Discovery"
 		}
+	},
+	"games": {
+		"h1": "Games & Timer",
+		"play": "Play",
+		"tetris": "Tetris",
+		"snake": "Snake",
+		"quit": "Back to the clock",
+		"score": "Score:",
+		"lines-level": "Lines {{lines}} · Level {{level}}",
+		"length": "Length {{length}}",
+		"over": "Game over",
+		"paused": "Paused",
+		"drop": "Drop",
+		"pause": "Pause",
+		"hint": "Tetris: ▲ rotates, ◀ ▶ move, ▼ speeds up, \"Drop\" drops the piece. Snake: steer with the arrows. On a computer the arrow keys, space and P work too. Tip: bookmark the page with #games at the end or add it to your home screen as an app."
+	},
+	"timer": {
+		"h2": "Countdown & stopwatch",
+		"minutes": "Minutes",
+		"seconds": "Seconds",
+		"countdown": "Start countdown",
+		"stopwatch": "Start stopwatch",
+		"pause": "Pause / resume",
+		"stop": "Stop"
 	},
 	"about": {
 		"h1": "About",
