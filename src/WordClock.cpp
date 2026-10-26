@@ -381,6 +381,27 @@ void ensureExtraSettings() {
     eeprom::write();
 }
 
+// Alarms and word colors, appended after ensureExtraSettings()'s block.
+void ensureExtraSettings2() {
+    bool valid = G.extras2Magic == EXTRAS2_MAGIC &&
+                 (G.wordColorFlags & ~WORD_COLORS_MASK) == 0;
+    for (const AlarmSetting &alarm : G.alarms) {
+        valid = valid && alarm.hour < 24 && alarm.minute < 60 &&
+                alarm.effect < 16;
+    }
+    if (valid) {
+        return;
+    }
+    G.extras2Magic = EXTRAS2_MAGIC;
+    memset(G.alarms, 0, sizeof(G.alarms));
+    for (AlarmSetting &alarm : G.alarms) {
+        alarm.hour = 7;
+        alarm.effect = 7; // sunrise
+    }
+    G.wordColorFlags = 0;
+    eeprom::write();
+}
+
 //------------------------------------------------------------------------------
 
 void ensureI2CPins() {
@@ -418,6 +439,7 @@ void setup() {
     ensureTimezone();
     ensureWc24hSettings();
     ensureExtraSettings();
+    ensureExtraSettings2();
 
     //-------------------------------------
 
@@ -577,6 +599,8 @@ void setup() {
         setDefaultWc24hSettings();
         G.extrasMagic = 0;
         ensureExtraSettings();
+        G.extras2Magic = 0;
+        ensureExtraSettings2();
 
         eeprom::write();
         Serial.println("EEPROM written");
@@ -584,6 +608,12 @@ void setup() {
 
     // Initialization of COMMAND_MODE_xxx (color)
     G.progInit = true;
+
+    // Games, timer, messages, moods and the alarm are only temporary: after
+    // a restart the clock shows the time again.
+    if (G.prog >= COMMAND_MODE_GAME && G.prog <= COMMAND_MODE_ALARM) {
+        G.prog = COMMAND_MODE_WORD_CLOCK;
+    }
 
     //-------------------------------------
     // Get Pointer for ClockType

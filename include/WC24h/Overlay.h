@@ -28,6 +28,9 @@ enum OverlayType : uint8_t {
     OVERLAY_WEATHER_ICON = 4,
     OVERLAY_TICKER = 6,
     OVERLAY_TEMPERATURE_DIGITS = 10,
+    // Added for the ESP32 port:
+    OVERLAY_DAYS_UNTIL = 20, // "NOCH 12 TAGE: <text>", target in month/day
+    OVERLAY_MOON = 21,       // current moon phase as an icon
 };
 
 enum OverlayDateCode : uint8_t {
@@ -65,6 +68,8 @@ inline bool isOverlayTypeSupported(uint32_t type) {
     case OVERLAY_WEATHER_ICON:
     case OVERLAY_TICKER:
     case OVERLAY_TEMPERATURE_DIGITS:
+    case OVERLAY_DAYS_UNTIL:
+    case OVERLAY_MOON:
         return true;
     default:
         return false;

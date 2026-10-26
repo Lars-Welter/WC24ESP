@@ -1,5 +1,7 @@
 #include "WebPageAdapter.h"
 
+#include "WC24h/Ambient.h"
+#include "WC24h/Arcade.h"
 #include "WC24h/Games.h"
 #include "WC24h/NightTimer.h"
 #include "WC24h/Overlay.h"
@@ -211,11 +213,24 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload,
             //------------------------------------------------------------------------------
 
         case COMMAND_MODE_GAME: {
-            // "011" + game (3 digits): 1 = Tetris, 2 = Snake
+            // "011" + game (3 digits) + player name (up to 8 characters),
+            // game ids see wc24h::ArcadeGameId
             const uint32_t game =
                 length >= 6 ? split(payload, 3) : wc24h::GAME_TETRIS;
-            gameRequest = game == wc24h::GAME_SNAKE ? wc24h::GAME_SNAKE
-                                                    : wc24h::GAME_TETRIS;
+            gameRequest = game > 0 && game < 255 ? game : wc24h::GAME_TETRIS;
+            memset(gamePlayerName, 0, sizeof(gamePlayerName));
+            if (length > 6) {
+                size_t n = 0;
+                for (size_t i = 6; i < length && n < 8; i++) {
+                    const char ch = static_cast<char>(payload[i]);
+                    if (ch >= 32 && ch < 127) {
+                        gamePlayerName[n++] = ch;
+                    }
+                }
+                while (n > 0 && gamePlayerName[n - 1] == ' ') {
+                    gamePlayerName[--n] = '\0';
+                }
+            }
             if (G.prog != command) {
                 G.progInit = true;
             }
@@ -239,11 +254,96 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload,
 
             //------------------------------------------------------------------------------
 
-        case COMMAND_GAME_INPUT: {
-            // "113" + key (3 digits), see wc24h::GameKey
-            if (length >= 6 && gameKeyCount < GAME_KEY_QUEUE_SIZE) {
-                gameKeyQueue[gameKeyCount++] = split(payload, 3);
+        case COMMAND_MODE_MESSAGE: {
+            // "013" + repeats (3 digits) + text (up to 30 characters)
+            if (length < 7) {
+                break;
             }
+            messageRepeats = split(payload, 3);
+            if (messageRepeats == 0 || messageRepeats > 10) {
+                messageRepeats = 2;
+            }
+            payloadTextHandling(payload, messageText, 6);
+            G.progInit = true;
+            break;
+        }
+
+            //------------------------------------------------------------------------------
+
+        case COMMAND_MODE_AMBIENT: {
+            // "014" + effect (3 digits), see wc24h::AmbientEffect
+            ambientRequest = length >= 6 ? split(payload, 3) : 1;
+            G.progInit = true;
+            break;
+        }
+
+            //------------------------------------------------------------------------------
+
+        case COMMAND_MODE_ALARM: {
+            // ringing is only started by the clock itself
+            command = G.prog;
+            break;
+        }
+
+            //------------------------------------------------------------------------------
+
+        case COMMAND_GAME_INPUT: {
+            // "113" + key (3) + player (3) + value (5), see wc24h::GameKey,
+            // wc24h::ArcadeKey; player and value are optional
+            if (length >= 6 && gameKeyCount < GAME_KEY_QUEUE_SIZE) {
+                GameKeyEvent &event = gameKeyQueue[gameKeyCount++];
+                event.key = split(payload, 3);
+                event.player = length >= 9 ? split(payload, 6) : 1;
+                event.value = length >= 14 ? split(payload, 9, 5) : 0;
+            }
+            break;
+        }
+
+            //------------------------------------------------------------------------------
+
+        case COMMAND_SET_ALARMS: {
+            // "115" + per alarm: flags, hour, minute, effect (3 digits each)
+            if (length < 3 + MAX_ALARMS * 12) {
+                break;
+            }
+            for (uint8_t i = 0; i < MAX_ALARMS; i++) {
+                const uint8_t start = 3 + i * 12;
+                const uint32_t flags = split(payload, start);
+                const uint32_t hour = split(payload, start + 3);
+                const uint32_t minute = split(payload, start + 6);
+                const uint32_t effect = split(payload, start + 9);
+                if (flags > UINT8_MAX || hour > 23 || minute > 59 ||
+                    effect >= wc24h::AMBIENT_COUNT) {
+                    continue;
+                }
+                G.alarms[i] = {static_cast<uint8_t>(flags),
+                               static_cast<uint8_t>(hour),
+                               static_cast<uint8_t>(minute),
+                               static_cast<uint8_t>(effect)};
+            }
+            break;
+        }
+
+            //------------------------------------------------------------------------------
+
+        case COMMAND_SET_WORD_COLORS: {
+            // "116" + flags (3 digits), see WORD_COLORS_*
+            if (length >= 6) {
+                const uint32_t flags = split(payload, 3);
+                if ((flags & ~WORD_COLORS_MASK) == 0) {
+                    G.wordColorFlags = flags;
+                    parametersChanged = true;
+                }
+            }
+            break;
+        }
+
+            //------------------------------------------------------------------------------
+
+        case COMMAND_REQUEST_HIGHSCORES: {
+            // "210" + game (3 digits)
+            G.client_nr = num;
+            highscoreRequestGame = length >= 6 ? split(payload, 3) : 0;
             break;
         }
 
@@ -706,6 +806,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload,
             //------------------------------------------------------------------------------
 
         case COMMAND_REQUEST_BIRTHDAYS:
+        case COMMAND_REQUEST_FRAME:
         case COMMAND_REQUEST_WC24H:
         case COMMAND_REQUEST_MQTT_VALUES:
         case COMMAND_REQUEST_CONFIG_VALUES:

@@ -78,6 +78,8 @@ const CMD = {
 	MODE_TRANSITION: 10,
 	MODE_GAME: 11,
 	MODE_TIMER: 12,
+	MODE_MESSAGE: 13,
+	MODE_AMBIENT: 14,
 
 	// Settings
 	SET_INITIAL_VALUES: 20,
@@ -114,6 +116,8 @@ const CMD = {
 	SET_COLOR_ANIMATION: 112,
 	GAME_INPUT: 113,
 	SET_DIGITAL_CLOCK: 114,
+	SET_ALARMS: 115,
+	SET_WORD_COLORS: 116,
 	SPEED: 152,
 
 	// Requests
@@ -125,7 +129,9 @@ const CMD = {
 	REQ_MQTT_VALUES: 205,
 	REQ_BIRTHDAYS: 206,
 	REQ_I2C_SCAN: 207,
-	REQ_WC24H: 208
+	REQ_WC24H: 208,
+	REQ_FRAME: 209,
+	REQ_HIGHSCORES: 210
 };
 
 const NIGHT_TIMER_FLAG_ACTIVE = 0x80;
@@ -134,7 +140,8 @@ const OVERLAY_FLAG_ACTIVE = 0x01;
 const OVERLAY_TEXT_LENGTH = 23;
 // value: i18n key, in the order shown in the type selection
 const OVERLAY_TYPES = [[0, "none"], [1, "icon"], [4, "weather-icon"], [2, "date"],
-	[3, "temperature-words"], [10, "temperature-digits"], [6, "ticker"]];
+	[3, "temperature-words"], [10, "temperature-digits"], [6, "ticker"], [20, "days-until"], [21, "moon"]];
+const OVERLAY_TYPE_DAYS_UNTIL = 20;
 const OVERLAY_TYPE_ICON = 1;
 const OVERLAY_TYPE_TICKER = 6;
 const OVERLAY_DATE_FIXED = 1;
@@ -351,6 +358,21 @@ function initWebsocket() {
 				renderTimerStatus(data);
 				break;
 			}
+			case "frame": {
+				frameWaiting = false;
+				renderFrame(data.rgb);
+				renderStatusLine(data);
+				break;
+			}
+			case "highscores": {
+				renderHighscores(data);
+				break;
+			}
+			case "alarm": {
+				document.getElementById("alarm-ringing").hidden = !data.ringing;
+				if (data.ringing) vibrate([300, 200, 300]);
+				break;
+			}
 			case "mqtt": {
 				document.getElementById("mqtt-port").value = data.MQTT_Port;
 				const mqttServer = document.getElementById("mqtt-server");
@@ -442,6 +464,7 @@ function initWebsocket() {
 				if (data.digitalClockFlags !== undefined) {
 					setDigitalClockOptions(data.digitalClockFlags);
 				}
+				renderExtrasConfig(data);
 
 				if (modeColorForm) {
 					modeColorForm.style.gridTemplateColumns = data.hasSecondsFrame ? "1fr 1fr 1fr" : "1fr 1fr";
@@ -870,10 +893,14 @@ function updateOverlayRow(row, idx) {
 		const field = input.parentElement.classList.contains("wc24h-field") ? input.parentElement : input;
 		field.style.display = visible ? "" : "none";
 	};
+	const daysUntil = type === OVERLAY_TYPE_DAYS_UNTIL;
 	show("icon", type === OVERLAY_TYPE_ICON);
-	show("text", type === OVERLAY_TYPE_TICKER);
-	show("start", dateCode === OVERLAY_DATE_FIXED);
-	show("days", dateCode !== 0);
+	show("text", type === OVERLAY_TYPE_TICKER || daysUntil);
+	// "days until" uses the date input for its target date and is shown every day
+	show("date", !daysUntil);
+	show("start", dateCode === OVERLAY_DATE_FIXED || daysUntil);
+	show("days", dateCode !== 0 && !daysUntil);
+	element("start").placeholder = i18next.t(daysUntil ? "view.wc24h.overlay-target" : "view.wc24h.overlay-start");
 }
 
 function toOverlayText(text) {
@@ -901,7 +928,7 @@ function sendOverlays() {
 			nstr(active.checked ? OVERLAY_FLAG_ACTIVE : 0) +
 			nstr(clamp(value("interval"), 1, 60)) +
 			nstr(clamp(value("duration"), 5, 255)) +
-			nstr(value("date")) +
+			nstr(value("type") === OVERLAY_TYPE_DAYS_UNTIL ? 0 : value("date")) +
 			nstr(month) +
 			nstr(day) +
 			nstr(clamp(value("days"), 1, 255)) +
@@ -1063,7 +1090,7 @@ document.addEventListener("DOMContentLoaded", function() {
 	/**
 	 * A menu item has been clicked.
 	 */
-	document.querySelectorAll("a[data-navigation]").forEach(navLink => {
+	document.querySelectorAll("[data-navigation]").forEach(navLink => {
 		navLink.addEventListener("click", function(event) {
 			event.preventDefault();
 			let navigation = this.dataset.navigation;
@@ -1081,6 +1108,16 @@ document.addEventListener("DOMContentLoaded", function() {
 				sendCmd(CMD.REQ_CONFIG_VALUES);
 				sendCmd(CMD.REQ_WC24H);
 			}
+			if (navigation === "extras") {
+				sendCmd(CMD.REQ_CONFIG_VALUES);
+			}
+			if (navigation === "home" || navigation === "games") {
+				requestFrame();
+			}
+			document.querySelectorAll(".bottom-nav [data-navigation]").forEach(btn => {
+				btn.classList.toggle("active", btn.dataset.navigation === navigation);
+			});
+			document.body.classList.remove("menu-open");
 			if (navigation === "main" || navigation === "settings" || navigation === "frontoptions") {
 				sendCmd(CMD.REQ_CONFIG_VALUES);
 				sendCmd(CMD.REQ_AUTO_BRIGHT);
@@ -1097,7 +1134,7 @@ document.addEventListener("DOMContentLoaded", function() {
 		});
 	});
 
-	setActiveNavigation("main");
+	setActiveNavigation("home");
 
 	/**
 	 * The clock mode has been changed.
@@ -1558,17 +1595,109 @@ document.addEventListener("DOMContentLoaded", function() {
 });
 
 /*
- * Games (Tetris, Snake) and timer (countdown, stopwatch)
+ * Games, timer, start page, live preview, alarms, appearance
  */
-const GAME_TETRIS = 1;
-const GAME_SNAKE = 2;
-const GAME_KEY = { LEFT: 1, RIGHT: 2, UP: 3, DOWN: 4, ACTION: 5, PAUSE: 6 };
+const GAME_KEY = {
+	LEFT: 1,
+	RIGHT: 2,
+	UP: 3,
+	DOWN: 4,
+	ACTION: 5,
+	PAUSE: 6,
+	COLOR1: 11,
+	PAINT_SET: 20,
+	PAINT_FILL: 21,
+	PAINT_CLEAR: 22,
+	ANSWER: 30,
+	TAP: 31
+};
 const GAME_REPEAT_DELAY_MS = 220;
 const GAME_REPEAT_INTERVAL_MS = 90;
 const TIMER_ACTION = { COUNTDOWN: 1, STOPWATCH: 2, PAUSE: 3, STOP: 4 };
+const MATRIX_ROWS = 16;
+const MATRIX_COLS = 18;
+const FRONT_LETTERS = [
+	"ESAISTOVIERTELEINS", "DREINERSECHSIEBENE", "ELFÜNFNEUNVIERACHT",
+	"NULLZWEINZWÖLFZEHN", "UNDOZWANZIGVIERZIG", "DREISSIGFÜNFZIGUHR",
+	"MINUTENIVORUNDNACH", "EINDREIVIERTELHALB", "SIEBENEUNULLZWEINE",
+	"FÜNFSECHSNACHTVIER", "DREINSUNDAELFEZEHN", "ZWANZIGGRADREISSIG",
+	"VIERZIGZWÖLFÜNFZIG", "MINUTENUHREFRÜHVOR", "ABENDSMITTERNACHTS",
+	"MORGENSWARMMITTAGS"
+];
+// Same order as wc24h::Palette in Arcade.h
+const PAINT_COLORS = ["#000000", "#ff0000", "#ff7700", "#ffdd00", "#00dd00", "#00dddd",
+	"#0055ff", "#9933ff", "#ff66cc", "#ffffff"];
 
-function sendGameKey(key) {
-	sendCmd(CMD.GAME_INPUT, nstr(key));
+/*
+ * Per game: control panel, which pad buttons are shown, key labels.
+ * pad: list of pad keys to show; action: label key of the middle button.
+ */
+const GAMES = new Map([
+	[1, { key: "tetris", controls: "pad", pad: [1, 2, 3, 4, 5, 6], action: "games.drop", hint: "games.hint-tetris" }],
+	[2, { key: "snake", controls: "pad", pad: [1, 2, 3, 4, 6], hint: "games.hint-snake" }],
+	[3, { key: "simon", controls: "simon", hint: "games.hint-simon" }],
+	[4, { key: "flappy", controls: "pad", pad: [5, 6], action: "games.flap", hint: "games.hint-flappy" }],
+	[5, { key: "breakout", controls: "pad", pad: [1, 2, 5, 6], action: "games.launch", hint: "games.hint-breakout" }],
+	[6, { key: "invaders", controls: "pad", pad: [1, 2, 5, 6], action: "games.fire", hint: "games.hint-invaders" }],
+	[7, { key: "frogger", controls: "pad", pad: [1, 2, 3, 4, 6], repeat: false, hint: "games.hint-frogger" }],
+	[8, { key: "pong", controls: "pad", pad: [3, 4], twoPlayer: true, hint: "games.hint-pong" }],
+	[9, { key: "pong-cpu", controls: "pad", pad: [3, 4], hint: "games.hint-pong-cpu" }],
+	[10, { key: "connect4", controls: "pad", pad: [1, 2, 5], action: "games.drop", repeat: false, twoPlayer: true, hint: "games.hint-connect4" }],
+	[11, { key: "connect4-cpu", controls: "pad", pad: [1, 2, 5], action: "games.drop", repeat: false, hint: "games.hint-connect4-cpu" }],
+	[12, { key: "reaction", controls: "reaction", twoPlayer: true, hint: "games.hint-reaction" }],
+	[13, { key: "hangman", controls: "keyboard", hint: "games.hint-hangman" }],
+	[14, { key: "clock-quiz", controls: "quiz", hint: "games.hint-clock-quiz" }],
+	[15, { key: "word-find", controls: "tap", hint: "games.hint-word-find" }],
+	[16, { key: "math", controls: "math", hint: "games.hint-math" }],
+	[20, { key: "paint", controls: "paint", hint: "games.hint-paint" }]
+]);
+const HIGHSCORE_GAMES = new Set([1, 2, 3, 4, 5, 6, 7, 13, 14, 15, 16]);
+const PROG_NAMES = new Map([[0, "mode.wordclock"], [1, "mode.wordclock"], [2, "functions.mode.seconds"],
+	[3, "functions.mode.scrollingtext"], [4, "functions.mode.rainbow"], [5, "functions.mode.color-change"],
+	[6, "functions.mode.color"], [7, "functions.mode.digital-clock"], [8, "functions.mode.symbol"],
+	[10, "mode.wordclock"], [11, "nav.games"], [12, "timer.h2"], [13, "home.message"], [14, "home.mood"],
+	[15, "extras.alarm.h2"]]);
+
+let currentGame = 0;
+let lastGameStatus = null;
+let paintColor = 1;
+let paintFill = false;
+let mathInput = "";
+let frameWaiting = false;
+let frameRequestedAt = 0;
+
+function storageGet(key, fallback) {
+	try {
+		const value = localStorage.getItem(key);
+		return value === null ? fallback : value;
+	} catch (error) {
+		debugMessage("Local storage is not available.", error);
+		return fallback;
+	}
+}
+
+function storageSet(key, value) {
+	try {
+		localStorage.setItem(key, value);
+	} catch (error) {
+		// private mode: settings just are not remembered
+		debugMessage("Local storage is not available.", error);
+	}
+}
+
+function playerNumber() {
+	const checked = document.querySelector("input[name='player-number']:checked");
+	return checked ? Number(checked.value) : 1;
+}
+
+function sendGameKey(key, value = 0) {
+	sendCmd(CMD.GAME_INPUT, nstr(key) + nstr(playerNumber()) + nstr5(value));
+}
+
+function vibrate(pattern) {
+	if (navigator.vibrate) {
+		navigator.vibrate(pattern);
+	}
 }
 
 function formatTimer(seconds) {
@@ -1577,45 +1706,275 @@ function formatTimer(seconds) {
 	return `${mm}:${ss}`;
 }
 
-function renderGameStatus(data) {
-	document.getElementById("game-score").textContent = data.score;
-	let extra = "";
-	if (data.game === GAME_TETRIS) {
-		extra = i18next.t("games.lines-level", { lines: data.lines, level: data.level });
-	} else if (data.game === GAME_SNAKE) {
-		extra = i18next.t("games.length", { length: data.length });
+function toClockText(text) {
+	const umlauts = { "ä": "ae", "ö": "oe", "ü": "ue", "Ä": "AE", "Ö": "OE", "Ü": "UE", "ß": "ss" };
+	return text.replace(/[äöüÄÖÜß]/g, umlaut => umlauts[umlaut]).replace(/[^\x20-\x7E]/g, "");
+}
+
+function isSectionVisible(name) {
+	const section = document.querySelector(`.section-${name}`);
+	return Boolean(section) && section.style.display === "block";
+}
+
+/*
+ * Live preview
+ */
+function initPreviews() {
+	document.querySelectorAll("[data-preview]").forEach(preview => {
+		for (let row = 0; row < MATRIX_ROWS; row++) {
+			for (let col = 0; col < MATRIX_COLS; col++) {
+				const cell = document.createElement("span");
+				cell.textContent = FRONT_LETTERS[row][col];
+				cell.dataset.cell = row * MATRIX_COLS + col;
+				preview.appendChild(cell);
+			}
+		}
+	});
+}
+
+function renderFrame(hex) {
+	if (!hex || hex.length < MATRIX_ROWS * MATRIX_COLS * 6) {
+		return;
 	}
-	document.getElementById("game-extra").textContent = extra;
+	document.querySelectorAll("[data-preview]").forEach(preview => {
+		if (preview.offsetParent === null) {
+			return;
+		}
+		const cells = preview.children;
+		for (let i = 0; i < cells.length; i++) {
+			const red = parseInt(hex.substr(i * 6, 2), 16);
+			const green = parseInt(hex.substr(i * 6 + 2, 2), 16);
+			const blue = parseInt(hex.substr(i * 6 + 4, 2), 16);
+			const max = Math.max(red, green, blue);
+			if (max < 3) {
+				cells[i].style.color = "";
+				cells[i].style.textShadow = "";
+				cells[i].classList.remove("lit");
+				continue;
+			}
+			// LEDs run dimmed; show the hue at full strength
+			const scale = 255 / max;
+			const color = `rgb(${Math.round(red * scale)}, ${Math.round(green * scale)}, ${Math.round(blue * scale)})`;
+			cells[i].style.color = color;
+			cells[i].style.textShadow = `0 0 6px ${color}`;
+			cells[i].classList.add("lit");
+		}
+	});
+}
+
+function wifiQuality(rssi) {
+	if (rssi >= -60) return "status.wifi-great";
+	if (rssi >= -70) return "status.wifi-good";
+	if (rssi >= -80) return "status.wifi-ok";
+	return "status.wifi-weak";
+}
+
+function renderStatusLine(data) {
+	const mode = i18next.t(PROG_NAMES.get(data.prog) || "mode.wordclock");
+	const text = i18next.t("status.line", {
+		mode,
+		wifi: i18next.t(wifiQuality(data.rssi)),
+		power: i18next.t(data.power ? "status.on" : "status.off")
+	});
+	document.querySelectorAll("[data-status-line]").forEach(el => { el.textContent = text; });
+}
+
+function requestFrame() {
+	const now = Date.now();
+	if (frameWaiting && now - frameRequestedAt < 1500) {
+		return;
+	}
+	frameWaiting = true;
+	frameRequestedAt = now;
+	sendCmd(CMD.REQ_FRAME);
+}
+
+function startFramePolling() {
+	let lastSlow = 0;
+	setInterval(() => {
+		if (document.visibilityState !== "visible" || !websocket || websocket.readyState !== WebSocket.OPEN) {
+			return;
+		}
+		const fast = isSectionVisible("home") || (isSectionVisible("games") && currentGame);
+		const now = Date.now();
+		if (fast || now - lastSlow > 5000) {
+			lastSlow = now;
+			requestFrame();
+		}
+	}, 250);
+}
+
+/*
+ * Games
+ */
+function showControls(info) {
+	document.querySelectorAll("#game-box [data-controls]").forEach(panel => {
+		panel.hidden = panel.dataset.controls !== info.controls;
+	});
+	const gamePreview = document.querySelector(".preview-game");
+	gamePreview.hidden = !(info.controls === "tap" || info.controls === "paint");
+	if (info.controls === "pad") {
+		document.querySelectorAll(".gamepad .pad").forEach(pad => {
+			pad.hidden = !info.pad.includes(Number(pad.dataset.key));
+			if (pad.dataset.key !== "6") {
+				pad.dataset.repeat = info.repeat === false ? "0" : (["1", "2", "4"].includes(pad.dataset.key) ? "1" : "0");
+			}
+		});
+		const action = document.querySelector(".gamepad .pad-action");
+		action.textContent = i18next.t(info.action || "games.drop");
+	}
+}
+
+function startGame(id) {
+	const info = GAMES.get(id);
+	if (!info) {
+		return;
+	}
+	currentGame = id;
+	lastGameStatus = null;
+	mathInput = "";
+	document.getElementById("math-display").textContent = "";
+	document.getElementById("game-box").hidden = false;
+	document.getElementById("game-title").textContent = i18next.t(`games.${info.key}`);
+	document.getElementById("game-hint").textContent = i18next.t(info.hint);
+	document.getElementById("game-score-line").textContent = "";
+	document.getElementById("game-state").textContent = "";
+	document.getElementById("game-text").textContent = "";
+	document.querySelectorAll(".letter-keys button").forEach(btn => btn.classList.remove("used", "right", "wrong"));
+	showControls(info);
+	const name = toClockText(document.getElementById("player-name").value).substring(0, 8);
+	sendCmd(CMD.MODE_GAME, nstr(id) + name);
+	document.getElementById("highscores").hidden = !HIGHSCORE_GAMES.has(id);
+	if (HIGHSCORE_GAMES.has(id)) {
+		sendCmd(CMD.REQ_HIGHSCORES, nstr(id));
+	}
+	document.getElementById("game-box").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function renderGameStatus(data) {
+	const info = GAMES.get(data.game);
+	if (!info || data.game !== currentGame) {
+		return;
+	}
+	const previous = lastGameStatus;
+	lastGameStatus = data;
+	const parts = [];
+	if (info.twoPlayer || data.game === 9 || data.game === 11) {
+		if (data.game === 10 || data.game === 11) {
+			if (!data.over) {
+				parts.push(i18next.t(data.turn === 1 ? "games.turn-red" : "games.turn-yellow"));
+			}
+		} else {
+			parts.push(i18next.t("games.two-score", { s1: data.score1 || 0, s2: data.score2 || 0 }));
+		}
+	} else if (data.game !== 20) {
+		parts.push(i18next.t("games.score-value", { score: data.score }));
+	}
+	if (data.lives !== undefined && data.game !== 13) {
+		parts.push("♥".repeat(Math.max(0, data.lives)));
+	}
+	if (data.level) {
+		parts.push(i18next.t("games.level", { level: data.level }));
+	}
+	document.getElementById("game-score-line").textContent = parts.join(" · ");
+
+	let text = "";
+	switch (data.game) {
+		case 1: text = i18next.t("games.lines", { lines: data.text }); break;
+		case 2: text = i18next.t("games.length", { length: data.text }); break;
+		case 3: text = i18next.t(data.text === "input" ? "games.simon-input" : "games.simon-watch"); break;
+		case 4: text = data.text === "tap" ? i18next.t("games.flappy-start") : ""; break;
+		case 9: case 11: text = data.text === "cpu" ? i18next.t("games.against-clock") : ""; break;
+		case 12:
+			text = data.text2 === "foul" ? i18next.t("games.reaction-foul")
+				: i18next.t(data.text === "go" ? "games.reaction-go" : "games.reaction-wait");
+			break;
+		case 13:
+			text = `${data.text}   ♥ ${data.lives}` + (data.text2 ? `   ✗ ${data.text2.split("").join(" ")}` : "");
+			updateLetterKeys(data);
+			break;
+		case 14:
+			text = i18next.t("games.question", { progress: data.text });
+			if (data.text2) {
+				const right = data.text2[0] === "+";
+				text += " · " + i18next.t(right ? "games.right" : "games.wrong-time", { time: data.text2.substring(1) });
+			}
+			break;
+		case 15: text = i18next.t("games.find", { word: data.text, progress: data.text2 }); break;
+		case 16: {
+			text = data.text;
+			const [progress, result] = data.text2.split(" ");
+			text += ` (${progress})`;
+			if (result && previous && previous.text2 !== data.text2) {
+				const right = result[0] === "+";
+				document.getElementById("math-display").textContent =
+					right ? "✓" : i18next.t("games.correct-answer", { answer: result.substring(1) });
+				mathInput = "";
+			}
+			break;
+		}
+		default: break;
+	}
+	document.getElementById("game-text").textContent = text;
+
 	let state = "";
 	if (data.over) {
-		state = i18next.t("games.over");
+		if (data.game === 13) {
+			state = i18next.t(data.winner ? "games.solved" : "games.over");
+		} else if (info.twoPlayer || data.game === 9 || data.game === 11) {
+			state = data.winner ? i18next.t("games.winner", { player: data.winner }) : i18next.t("games.draw");
+		} else {
+			state = i18next.t("games.over");
+		}
+		if (data.rank) {
+			state += " " + i18next.t("games.new-highscore", { rank: data.rank });
+		}
 	} else if (data.paused) {
 		state = i18next.t("games.paused");
 	}
 	document.getElementById("game-state").textContent = state;
+
+	if (previous) {
+		if (data.over && !previous.over) {
+			vibrate([120, 60, 120]);
+		} else if (data.score > previous.score || data.score1 > previous.score1 || data.score2 > previous.score2) {
+			vibrate(30);
+		}
+	}
 }
 
-function renderTimerStatus(data) {
-	const display = document.getElementById("timer-display");
-	display.textContent = formatTimer(data.seconds);
-	display.classList.toggle("finished", Boolean(data.finished));
+function renderHighscores(data) {
+	if (data.game !== currentGame) {
+		return;
+	}
+	const list = document.getElementById("highscore-list");
+	list.innerHTML = "";
+	if (!data.list.length) {
+		const item = document.createElement("li");
+		item.textContent = i18next.t("games.no-highscores");
+		list.appendChild(item);
+	}
+	data.list.forEach(entry => {
+		const item = document.createElement("li");
+		item.textContent = `${entry.name} – ${entry.score}`;
+		list.appendChild(item);
+	});
 }
 
-function initGamesAndTimer() {
-	document.querySelectorAll(".game-start").forEach(btn => {
-		btn.addEventListener("click", () => {
-			sendCmd(CMD.MODE_GAME, nstr(Number(btn.dataset.game)));
-		});
+function updateLetterKeys(data) {
+	const wrong = data.text2 || "";
+	const right = data.text.replace(/[^A-Z]/g, "");
+	document.querySelectorAll(".letter-keys button").forEach(btn => {
+		const letter = btn.textContent;
+		btn.classList.toggle("wrong", wrong.includes(letter));
+		btn.classList.toggle("right", right.includes(letter));
 	});
-	document.querySelectorAll(".game-quit").forEach(btn => {
-		btn.addEventListener("click", () => sendColorData(CMD.MODE_WORD_CLOCK));
-	});
+}
 
-	// Touch / mouse pads; arrows and "down" repeat while held.
-	document.querySelectorAll(".gamepad .pad").forEach(pad => {
+function initGamePads() {
+	document.querySelectorAll("#game-box .pad[data-key]").forEach(pad => {
 		let delayTimer = null;
 		let repeatTimer = null;
-		const key = Number(pad.dataset.key);
 		const stop = () => {
 			clearTimeout(delayTimer);
 			clearInterval(repeatTimer);
@@ -1625,9 +1984,11 @@ function initGamesAndTimer() {
 		};
 		pad.addEventListener("pointerdown", event => {
 			event.preventDefault();
+			const key = Number(pad.dataset.key);
 			pad.setPointerCapture(event.pointerId);
 			pad.classList.add("pressed");
 			sendGameKey(key);
+			vibrate(10);
 			if (pad.dataset.repeat === "1") {
 				delayTimer = setTimeout(() => {
 					repeatTimer = setInterval(() => sendGameKey(key), GAME_REPEAT_INTERVAL_MS);
@@ -1638,19 +1999,135 @@ function initGamesAndTimer() {
 		pad.addEventListener("contextmenu", event => event.preventDefault());
 	});
 
-	// Keyboard while the games page is open.
+	// Hangman keyboard
+	const keys = document.querySelector(".letter-keys");
+	for (let code = 65; code <= 90; code++) {
+		const btn = document.createElement("button");
+		btn.type = "button";
+		btn.textContent = String.fromCharCode(code);
+		btn.addEventListener("click", () => sendGameKey(code));
+		keys.appendChild(btn);
+	}
+
+	// Clock quiz
+	const ticks = document.querySelector(".quiz-ticks");
+	for (let i = 0; i < 12; i++) {
+		const angle = i * 30 * Math.PI / 180;
+		const tick = document.createElementNS("http://www.w3.org/2000/svg", "line");
+		tick.setAttribute("x1", Math.sin(angle) * 40);
+		tick.setAttribute("y1", -Math.cos(angle) * 40);
+		tick.setAttribute("x2", Math.sin(angle) * 45);
+		tick.setAttribute("y2", -Math.cos(angle) * 45);
+		ticks.appendChild(tick);
+	}
+	const hour = document.getElementById("quiz-hour");
+	const minute = document.getElementById("quiz-minute");
+	const updateClock = () => {
+		const hh = Number(hour.value);
+		const mm = Number(minute.value);
+		document.getElementById("quiz-hour-hand").setAttribute("transform", `rotate(${(hh % 12) * 30 + mm / 2})`);
+		document.getElementById("quiz-minute-hand").setAttribute("transform", `rotate(${mm * 6})`);
+		document.getElementById("quiz-time").textContent = `${hh}:${String(mm).padStart(2, "0")}`;
+	};
+	hour.addEventListener("input", updateClock);
+	minute.addEventListener("input", updateClock);
+	updateClock();
+	document.getElementById("quiz-check").addEventListener("click", () => {
+		sendGameKey(GAME_KEY.ANSWER, Number(hour.value) * 100 + Number(minute.value));
+	});
+
+	// Mental arithmetic keypad
+	document.querySelectorAll(".keypad [data-digit]").forEach(btn => {
+		btn.addEventListener("click", () => {
+			const digit = btn.dataset.digit;
+			if (digit === "back") {
+				mathInput = mathInput.slice(0, -1);
+			} else if (digit === "ok") {
+				if (mathInput) {
+					sendGameKey(GAME_KEY.ANSWER, Number(mathInput));
+				}
+				return;
+			} else if (mathInput.length < 4) {
+				mathInput += digit;
+			}
+			document.getElementById("math-display").textContent = mathInput;
+		});
+	});
+
+	// Paint palette
+	const palette = document.getElementById("paint-palette");
+	PAINT_COLORS.forEach((color, index) => {
+		const swatch = document.createElement("button");
+		swatch.type = "button";
+		swatch.className = "swatch";
+		swatch.style.background = color;
+		swatch.setAttribute("aria-label", color);
+		swatch.classList.toggle("selected", index === paintColor);
+		swatch.addEventListener("click", () => {
+			paintColor = index;
+			palette.querySelectorAll(".swatch").forEach((el, i) => el.classList.toggle("selected", i === index));
+		});
+		palette.appendChild(swatch);
+	});
+	document.getElementById("paint-fill").addEventListener("click", () => sendGameKey(GAME_KEY.PAINT_FILL, paintColor));
+	document.getElementById("paint-clear").addEventListener("click", () => sendGameKey(GAME_KEY.PAINT_CLEAR));
+
+	// Tapping the game preview: word find taps letters, paint draws (also by dragging)
+	const gamePreview = document.querySelector(".preview-game");
+	let painting = false;
+	let lastCell = -1;
+	const tapCell = target => {
+		const cell = target && target.dataset ? Number(target.dataset.cell) : NaN;
+		if (Number.isNaN(cell) || cell === lastCell) {
+			return;
+		}
+		lastCell = cell;
+		if (currentGame === 20) {
+			sendGameKey(GAME_KEY.PAINT_SET, cell * 16 + paintColor);
+		} else if (currentGame === 15) {
+			sendGameKey(GAME_KEY.TAP, cell);
+			vibrate(10);
+		}
+	};
+	gamePreview.addEventListener("pointerdown", event => {
+		event.preventDefault();
+		painting = true;
+		lastCell = -1;
+		tapCell(event.target);
+	});
+	gamePreview.addEventListener("pointermove", event => {
+		if (painting && currentGame === 20) {
+			tapCell(document.elementFromPoint(event.clientX, event.clientY));
+		}
+	});
+	["pointerup", "pointercancel", "pointerleave"].forEach(type => gamePreview.addEventListener(type, () => { painting = false; }));
+	gamePreview.addEventListener("contextmenu", event => event.preventDefault());
+
+	// Keyboard while the games page is open
 	const KEY_MAP = new Map([
 		["ArrowLeft", GAME_KEY.LEFT],
 		["ArrowRight", GAME_KEY.RIGHT],
 		["ArrowUp", GAME_KEY.UP],
 		["ArrowDown", GAME_KEY.DOWN],
 		[" ", GAME_KEY.ACTION],
-		["p", GAME_KEY.PAUSE],
-		["P", GAME_KEY.PAUSE]
+		["Enter", GAME_KEY.ACTION]
 	]);
 	document.addEventListener("keydown", event => {
-		const section = document.querySelector(".section-games");
-		if (!section || section.style.display !== "block" || event.target.tagName === "INPUT") {
+		if (!isSectionVisible("games") || !currentGame || event.target.tagName === "INPUT") {
+			return;
+		}
+		const upper = event.key.length === 1 ? event.key.toUpperCase() : "";
+		if (currentGame === 13 && upper >= "A" && upper <= "Z") {
+			sendGameKey(upper.charCodeAt(0));
+			event.preventDefault();
+			return;
+		}
+		if (currentGame === 3 && upper >= "1" && upper <= "4") {
+			sendGameKey(GAME_KEY.COLOR1 + Number(upper) - 1);
+			return;
+		}
+		if (upper === "P") {
+			sendGameKey(GAME_KEY.PAUSE);
 			return;
 		}
 		const key = KEY_MAP.get(event.key);
@@ -1659,6 +2136,30 @@ function initGamesAndTimer() {
 			sendGameKey(key);
 		}
 	});
+}
+
+function initGamesAndTimer() {
+	const nameInput = document.getElementById("player-name");
+	nameInput.value = storageGet("playerName", "");
+	nameInput.addEventListener("change", () => storageSet("playerName", nameInput.value));
+	const player = storageGet("playerNumber", "1");
+	document.querySelectorAll("input[name='player-number']").forEach(radio => {
+		radio.checked = radio.value === player;
+		radio.addEventListener("change", () => storageSet("playerNumber", radio.value));
+	});
+
+	document.querySelectorAll(".tile[data-game]").forEach(tile => {
+		tile.addEventListener("click", () => startGame(Number(tile.dataset.game)));
+	});
+	document.getElementById("game-again").addEventListener("click", () => startGame(currentGame));
+	document.querySelectorAll(".game-quit").forEach(btn => {
+		btn.addEventListener("click", () => {
+			currentGame = 0;
+			document.getElementById("game-box").hidden = true;
+			sendColorData(CMD.MODE_WORD_CLOCK);
+		});
+	});
+	initGamePads();
 
 	const sendTimer = (action, seconds = 0) => sendCmd(CMD.MODE_TIMER, nstr(action) + nstr5(seconds));
 	document.getElementById("timer-countdown").addEventListener("click", () => {
@@ -1673,11 +2174,190 @@ function initGamesAndTimer() {
 	document.getElementById("timer-pause").addEventListener("click", () => sendTimer(TIMER_ACTION.PAUSE));
 	document.getElementById("timer-stop").addEventListener("click", () => sendTimer(TIMER_ACTION.STOP));
 
-	// Opening the page with #games (e.g. from a home screen icon) goes straight to the games.
-	if (location.hash === "#games") {
-		const link = document.querySelector(".pure-menu-link[data-navigation='games']");
-		if (link) link.click();
+	initPreviews();
+	initHome();
+	initExtras();
+	initAppearance();
+	startFramePolling();
+
+	// Opening the page with #games or #extras (e.g. from a home screen icon) goes straight there.
+	const target = location.hash.replace("#", "") || "home";
+	const link = document.querySelector(`[data-navigation='${target}']`);
+	if (link) link.click();
+}
+
+function renderTimerStatus(data) {
+	const display = document.getElementById("timer-display");
+	display.textContent = formatTimer(data.seconds);
+	display.classList.toggle("finished", Boolean(data.finished));
+	if (data.finished) {
+		vibrate([200, 100, 200, 100, 200]);
 	}
+}
+
+/*
+ * Start page
+ */
+function sendMessage(text) {
+	const clean = toClockText(text).trim().substring(0, DATA_SCROLLINGTEXT_LENGTH);
+	if (!clean) {
+		return;
+	}
+	const repeats = Number(document.getElementById("message-repeats").value) || 2;
+	sendCmd(CMD.MODE_MESSAGE, nstr(repeats) + getPaddedString(clean, DATA_SCROLLINGTEXT_LENGTH));
+}
+
+function navigateTo(name) {
+	const link = document.querySelector(`.pure-menu-link[data-navigation='${name}']`);
+	if (link) link.click();
+}
+
+function initHome() {
+	document.querySelectorAll(".tile[data-goto]").forEach(tile => {
+		tile.addEventListener("click", () => {
+			navigateTo(tile.dataset.goto);
+			if (tile.dataset.scroll) {
+				document.getElementById(tile.dataset.scroll).scrollIntoView({ behavior: "smooth" });
+			}
+		});
+	});
+	document.querySelectorAll(".tile[data-action='clock']").forEach(tile => {
+		tile.addEventListener("click", () => sendColorData(CMD.MODE_WORD_CLOCK));
+	});
+	document.querySelectorAll(".tile[data-ambient]").forEach(tile => {
+		tile.addEventListener("click", () => sendCmd(CMD.MODE_AMBIENT, nstr(Number(tile.dataset.ambient))));
+	});
+	document.getElementById("message-send").addEventListener("click", () => {
+		sendMessage(document.getElementById("message-text").value);
+	});
+	document.querySelectorAll("[data-message]").forEach(btn => {
+		btn.addEventListener("click", () => sendMessage(btn.dataset.message));
+	});
+	document.getElementById("alarm-stop").addEventListener("click", () => {
+		sendColorData(CMD.MODE_WORD_CLOCK);
+		document.getElementById("alarm-ringing").hidden = true;
+	});
+}
+
+/*
+ * Alarms and word colors
+ */
+const ALARM_ACTIVE = 0x80;
+const ALARM_EFFECTS = [[7, "extras.alarm.sunrise"], [8, "extras.alarm.flash"], [4, "home.mood-fireworks"],
+	[1, "home.mood-lava"], [2, "home.mood-fire"], [5, "home.mood-stars"]];
+// Monday first; bit 0 is Sunday on the clock
+const WEEKDAY_BITS = [1, 2, 3, 4, 5, 6, 0];
+
+function createAlarmRow(index) {
+	const row = document.createElement("div");
+	row.className = "alarm-row";
+	row.innerHTML = `
+		<label class="switch"><input type="checkbox" class="alarm-active"><span class="slider round"></span></label>
+		<input type="time" class="alarm-time" value="07:00" aria-label="time">
+		<span class="alarm-days"></span>
+		<select class="alarm-effect" aria-label="effect"></select>`;
+	const days = row.querySelector(".alarm-days");
+	WEEKDAY_BITS.forEach((bit, i) => {
+		const label = document.createElement("label");
+		const box = document.createElement("input");
+		box.type = "checkbox";
+		box.dataset.bit = bit;
+		box.checked = i < 5;
+		label.appendChild(box);
+		label.appendChild(document.createTextNode(i18next.t(`extras.alarm.day${i}`)));
+		days.appendChild(label);
+	});
+	const effect = row.querySelector(".alarm-effect");
+	ALARM_EFFECTS.forEach(([value, key]) => {
+		const option = document.createElement("option");
+		option.value = value;
+		option.textContent = i18next.t(key);
+		effect.appendChild(option);
+	});
+	row.dataset.index = index;
+	return row;
+}
+
+function renderAlarms(alarms) {
+	const list = document.getElementById("alarm-list");
+	if (!list.children.length) {
+		for (let i = 0; i < 4; i++) {
+			list.appendChild(createAlarmRow(i));
+		}
+	}
+	(alarms || []).forEach(([flags, hour, minute, effect], i) => {
+		const row = list.children[i];
+		if (!row) return;
+		row.querySelector(".alarm-active").checked = (flags & ALARM_ACTIVE) !== 0;
+		row.querySelector(".alarm-time").value = `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+		row.querySelectorAll(".alarm-days input").forEach(box => {
+			box.checked = (flags & (1 << Number(box.dataset.bit))) !== 0;
+		});
+		row.querySelector(".alarm-effect").value = effect || 7;
+	});
+}
+
+function sendAlarms() {
+	let payload = "";
+	document.querySelectorAll("#alarm-list .alarm-row").forEach(row => {
+		let flags = row.querySelector(".alarm-active").checked ? ALARM_ACTIVE : 0;
+		row.querySelectorAll(".alarm-days input").forEach(box => {
+			if (box.checked) flags |= 1 << Number(box.dataset.bit);
+		});
+		const [hour, minute] = (row.querySelector(".alarm-time").value || "07:00").split(":").map(Number);
+		payload += nstr(flags) + nstr(hour) + nstr(minute) + nstr(Number(row.querySelector(".alarm-effect").value));
+	});
+	sendCmd(CMD.SET_ALARMS, payload);
+}
+
+function initExtras() {
+	renderAlarms([]);
+	document.getElementById("alarm-save").addEventListener("click", sendAlarms);
+	document.querySelectorAll(".word-color-option").forEach(el => {
+		el.addEventListener("change", () => {
+			const flags = (document.getElementById("learn-colors").checked ? 1 : 0) |
+				(document.getElementById("new-year").checked ? 2 : 0);
+			sendCmd(CMD.SET_WORD_COLORS, nstr(flags));
+		});
+	});
+}
+
+function renderExtrasConfig(data) {
+	if (data.alarms) {
+		renderAlarms(data.alarms);
+	}
+	if (data.wordColorFlags !== undefined) {
+		document.getElementById("learn-colors").checked = (data.wordColorFlags & 1) !== 0;
+		document.getElementById("new-year").checked = (data.wordColorFlags & 2) !== 0;
+	}
+}
+
+/*
+ * Appearance: dark mode and expert settings
+ */
+function applyTheme(theme) {
+	if (theme === "auto") {
+		document.documentElement.removeAttribute("data-theme");
+	} else {
+		document.documentElement.setAttribute("data-theme", theme);
+	}
+}
+
+function initAppearance() {
+	const theme = document.getElementById("theme");
+	theme.value = storageGet("theme", "auto");
+	applyTheme(theme.value);
+	theme.addEventListener("change", () => {
+		storageSet("theme", theme.value);
+		applyTheme(theme.value);
+	});
+	const expert = document.getElementById("expert-mode");
+	expert.checked = storageGet("expertMode", "0") === "1";
+	document.body.classList.toggle("expert", expert.checked);
+	expert.addEventListener("change", () => {
+		storageSet("expertMode", expert.checked ? "1" : "0");
+		document.body.classList.toggle("expert", expert.checked);
+	});
 }
 
 /*

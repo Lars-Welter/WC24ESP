@@ -214,6 +214,18 @@ enum BitmapSymbol : uint8_t {
     MAX_BITMAP_SYMBOLS
 };
 
+// Alarm clock: flags = ALARM_ACTIVE | weekday bits (bit 0 = Sunday ..
+// bit 6 = Saturday), effect = wc24h::AmbientEffect shown while it rings.
+constexpr uint8_t MAX_ALARMS = 4;
+constexpr uint8_t ALARM_ACTIVE = 0x80;
+constexpr uint8_t ALARM_WEEKDAYS = 0x7F;
+struct AlarmSetting {
+    uint8_t flags;
+    uint8_t hour;
+    uint8_t minute;
+    uint8_t effect;
+};
+
 struct GLOBAL {
     uint16_t sernr;
     uint16_t prog;
@@ -284,10 +296,21 @@ struct GLOBAL {
     uint16_t extrasMagic;
     uint8_t digitalClockFlags;
     uint8_t bootSpeed;
+
+    // Second appended block, see ensureExtraSettings2().
+    uint16_t extras2Magic;
+    AlarmSetting alarms[MAX_ALARMS];
+    uint8_t wordColorFlags;
 };
 extern GLOBAL G;
 
 constexpr uint16_t EXTRAS_MAGIC = 0xD1C5;
+constexpr uint16_t EXTRAS2_MAGIC = 0xA7E2;
+
+// G.wordColorFlags
+constexpr uint8_t WORD_COLORS_LEARN = 0x01;    // hours in a second color
+constexpr uint8_t WORD_COLORS_NEW_YEAR = 0x02; // fireworks at midnight
+constexpr uint8_t WORD_COLORS_MASK = 0x03;
 
 // G.digitalClockFlags, 0 keeps the original look.
 constexpr uint8_t DIGITAL_SEPARATOR_MASK = 0x03;
@@ -319,12 +342,22 @@ extern uint8_t lastMinute;
 
 // Requests from the web page for games and the timer, picked up by
 // ClockWork::loop(). Kept out of G so the EEPROM layout stays the same.
-constexpr uint8_t GAME_KEY_QUEUE_SIZE = 8;
+constexpr uint8_t GAME_KEY_QUEUE_SIZE = 16;
+struct GameKeyEvent {
+    uint8_t key;
+    uint8_t player;
+    uint32_t value;
+};
 extern uint8_t gameRequest;
-extern uint8_t gameKeyQueue[GAME_KEY_QUEUE_SIZE];
+extern char gamePlayerName[9];
+extern GameKeyEvent gameKeyQueue[GAME_KEY_QUEUE_SIZE];
 extern uint8_t gameKeyCount;
 extern uint8_t timerRequest;
 extern uint32_t timerRequestSeconds;
+extern char messageText[PAYLOAD_LENGTH];
+extern uint8_t messageRepeats;
+extern uint8_t ambientRequest;
+extern uint8_t highscoreRequestGame;
 
 extern uint32_t frontMatrix[MAX_ROW_SIZE];
 extern uint32_t lastFrontMatrix[MAX_ROW_SIZE];
@@ -393,6 +426,9 @@ enum CommandWords : uint8_t {
     COMMAND_MODE_TRANSITION = 10,
     COMMAND_MODE_GAME = 11,
     COMMAND_MODE_TIMER = 12,
+    COMMAND_MODE_MESSAGE = 13,
+    COMMAND_MODE_AMBIENT = 14,
+    COMMAND_MODE_ALARM = 15,
 
     PLACEHOLDER_MAX_MODE = 19,
 
@@ -431,6 +467,8 @@ enum CommandWords : uint8_t {
     COMMAND_SET_COLOR_ANIMATION = 112,
     COMMAND_GAME_INPUT = 113,
     COMMAND_SET_DIGITAL_CLOCK = 114,
+    COMMAND_SET_ALARMS = 115,
+    COMMAND_SET_WORD_COLORS = 116,
 
     COMMAND_SPEED = 152,
 
@@ -445,6 +483,8 @@ enum CommandWords : uint8_t {
     COMMAND_REQUEST_BIRTHDAYS = 206,
     COMMAND_REQUEST_I2C_SCAN = 207,
     COMMAND_REQUEST_WC24H = 208,
+    COMMAND_REQUEST_FRAME = 209,
+    COMMAND_REQUEST_HIGHSCORES = 210,
 
     PLACEHOLDER_MAX_REQUEST = 255,
 };

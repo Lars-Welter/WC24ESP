@@ -747,6 +747,14 @@ void Mqtt::callback(char *topic, byte *payload, unsigned int length) {
         processScrollingText(doc);
         processColor(doc);
         processBrightness(doc);
+        // {"notify_icon": 0..7} or {"notify_text": "WASCHMASCHINE FERTIG"}
+        if (doc.containsKey("notify_icon") || doc.containsKey("notify_text")) {
+            if (mqttInstance) {
+                mqttInstance->clockWork.showNotification(
+                    doc["notify_icon"] | -1,
+                    doc["notify_text"] | "");
+            }
+        }
     } else if (topicStr == baseTopic + "/scrolltext/set") {
         processScrollingText(doc);
     } else if (topicStr == baseTopic + "/effect_speed/set") {

@@ -21,10 +21,15 @@ uint8_t lastSecond = 0;
 uint8_t lastMinute = 0;
 
 uint8_t gameRequest = 0;
-uint8_t gameKeyQueue[GAME_KEY_QUEUE_SIZE] = {0};
+char gamePlayerName[9] = "";
+GameKeyEvent gameKeyQueue[GAME_KEY_QUEUE_SIZE] = {};
 uint8_t gameKeyCount = 0;
 uint8_t timerRequest = 0;
 uint32_t timerRequestSeconds = 0;
+char messageText[PAYLOAD_LENGTH] = "";
+uint8_t messageRepeats = 0;
+uint8_t ambientRequest = 0;
+uint8_t highscoreRequestGame = 0;
 
 uint32_t frontMatrix[MAX_ROW_SIZE] = {0};
 uint32_t lastFrontMatrix[MAX_ROW_SIZE] = {0};

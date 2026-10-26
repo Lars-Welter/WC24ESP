@@ -2,6 +2,9 @@
 //   g++ -std=gnu++11 -Wall -Wextra -Werror -Iinclude test/wc24h_test.cpp
 //   ./a.out
 
+#include "WC24h/Ambient.h"
+#include "WC24h/Arcade.h"
+#include "WC24h/Calendar.h"
 #include "WC24h/Games.h"
 #include "WC24h/NightTimer.h"
 #include "WC24h/Overlay.h"
@@ -312,7 +315,178 @@ void testCountTimer() {
     expectGame(!t.finished(9999999), "stopwatch never finishes");
 }
 
+
+// Plays every arcade game for a while with random keys; nothing may crash
+// or draw outside the palette.
+void testArcadeSmoke() {
+    wc24h::TetrisGame tetris;
+    wc24h::SnakeGame snake;
+    wc24h::SimonGame simon;
+    wc24h::FlappyGame flappy;
+    wc24h::BreakoutGame breakout;
+    wc24h::InvadersGame invaders;
+    wc24h::FroggerGame frogger;
+    wc24h::PongGame pong;
+    wc24h::Connect4Game connect4;
+    wc24h::ReactionGame reaction;
+    wc24h::HangmanGame hangman;
+    wc24h::ClockQuizGame quiz;
+    wc24h::WordFindGame words;
+    wc24h::MathGame math;
+    wc24h::PaintGame paint;
+    wc24h::ArcadeGame *games[] = {&tetris, &snake, &simon, &flappy,
+                                  &breakout, &invaders, &frogger, &pong,
+                                  &connect4, &reaction, &hangman, &quiz,
+                                  &words, &math, &paint};
+    static const uint8_t KEYS[] = {1, 2, 3, 4, 5, 11, 12, 13, 14, 20,
+                                   21, 22, 30, 31, 65, 69, 78, 90};
+    wc24h::GameRng rng;
+    rng.seed(99);
+    for (wc24h::ArcadeGame *game : games) {
+        uint32_t now = 1000;
+        game->start(1234, now);
+        for (uint32_t i = 0; i < 20000 && !game->over; i++) {
+            now += 7;
+            wc24h::GameInput in = {KEYS[rng.below(sizeof KEYS)],
+                                   static_cast<uint8_t>(1 + rng.below(2)),
+                                   rng.below(5000)};
+            if (i % 5 == 0) {
+                game->input(in, now);
+            }
+            game->update(now);
+            if (i % 50 == 0) {
+                wc24h::Canvas canvas;
+                game->render(canvas, now);
+                for (auto &row : canvas.cell) {
+                    for (uint8_t v : row) {
+                        expectGame(v < wc24h::PAL_COUNT, "palette index");
+                    }
+                }
+                wc24h::GameStatus status;
+                game->status(status);
+            }
+        }
+    }
+}
+
+void testArcadeRules() {
+    const wc24h::GameInput none = {0, 1, 0};
+    (void)none;
+
+    // Connect four: four in a column wins.
+    wc24h::Connect4Game c4;
+    c4.start(1, 0);
+    for (uint8_t i = 0; i < 3; i++) {
+        c4.drop(0, 0); // player 1
+        c4.drop(1, 0); // player 2
+    }
+    c4.drop(0, 0);
+    expectGame(c4.over && c4.winner == 1, "connect four column win");
+
+    // The computer takes a winning move.
+    c4.start(1, 0);
+    c4.cpu = true;
+    c4.board[5][4] = c4.board[5][5] = c4.board[5][6] = 2;
+    expectGame(c4.cpuChoice() == 3, "connect four cpu wins");
+
+    // Hangman: guessing all letters solves the word.
+    wc24h::HangmanGame hm;
+    hm.start(5, 0);
+    for (const char *p = hm.word; *p; p++) {
+        hm.input({static_cast<uint8_t>(*p), 1, 0}, 0);
+    }
+    expectGame(hm.over && hm.won, "hangman solved");
+
+    // Math: the right answer counts.
+    wc24h::MathGame mg;
+    mg.start(8, 0);
+    mg.input({wc24h::GAME_KEY_ANSWER, 1, mg.answer}, 0);
+    expectGame(mg.correct == 1, "math right answer");
+
+    // Clock quiz: 12 hour answers are accepted for the afternoon.
+    wc24h::ClockQuizGame cq;
+    cq.start(4, 0);
+    const uint32_t answer = (cq.hh % 12) * 100 + cq.mm;
+    cq.input({wc24h::GAME_KEY_ANSWER, 1, answer}, 0);
+    expectGame(cq.correct == 1, "clock quiz answer");
+
+    // Word find: tapping the target word letter by letter finds it.
+    wc24h::WordFindGame wf;
+    wf.start(3, 0);
+    const wc24h::WORD_ILLUMINATION &w = wc24h::illumination[wf.target];
+    for (uint8_t i = 0; i < (w.len & wc24h::ILLUMINATION_LEN_MASK); i++) {
+        wf.input({wc24h::GAME_KEY_TAP, 1,
+                  static_cast<uint32_t>(w.row * wc24h::GAME_COLS + w.col + i)},
+                 0);
+    }
+    expectGame(wf.found == 1, "word find tap sequence");
+
+    // Simon: repeating the sequence extends it, a wrong color ends it.
+    wc24h::SimonGame sg;
+    sg.start(2, 0);
+    sg.phase = wc24h::SimonGame::PHASE_INPUT;
+    sg.input({static_cast<uint8_t>(wc24h::GAME_KEY_COLOR1 + sg.seq[0]), 1, 0},
+             0);
+    expectGame(sg.len == 2 && !sg.over, "simon grows");
+    sg.phase = wc24h::SimonGame::PHASE_INPUT;
+    sg.pos = 0;
+    sg.input({static_cast<uint8_t>(wc24h::GAME_KEY_COLOR1 +
+                                   (sg.seq[0] + 1) % 4),
+              1, 0},
+             0);
+    expectGame(sg.over, "simon wrong color");
+
+    // Reaction: pressing too early gives the other player the point.
+    wc24h::ReactionGame rg;
+    rg.start(1, 0);
+    rg.input({wc24h::GAME_KEY_ACTION, 1, 0}, 10);
+    expectGame(rg.s2 == 1 && rg.s1 == 0, "reaction foul");
+
+    // Paint keeps its picture.
+    wc24h::PaintGame pg;
+    pg.start(0, 0);
+    pg.input({wc24h::GAME_KEY_PAINT_SET, 1, (2 * 18 + 3) * 16 + 4}, 0);
+    wc24h::Canvas canvas;
+    pg.render(canvas, 0);
+    expectGame(canvas.cell[2][3] == 4, "paint sets a cell");
+
+    // 3x5 text and scores stay on the canvas.
+    canvas.clear();
+    wc24h::drawScore(canvas, 12345678, wc24h::PAL_WHITE);
+    canvas.clear();
+    canvas.centeredText(5, "99x9=", wc24h::PAL_WHITE);
+}
+
+void testAmbientAndCalendar() {
+    wc24h::Ambient ambient;
+    wc24h::RgbFrame frame;
+    frame.clear();
+    for (uint8_t e = 1; e < wc24h::AMBIENT_COUNT; e++) {
+        ambient.start(e, 7, 0);
+        for (uint32_t t = 0; t < 200000; t += 97) {
+            ambient.render(frame, t);
+        }
+    }
+    expectGame(wc24h::daysUntil(2026, 10, 26, 12, 24) == 59, "days until xmas");
+    expectGame(wc24h::daysUntil(2026, 12, 25, 12, 24) == 364, "next year");
+    expectGame(wc24h::daysUntil(2026, 3, 1, 3, 1) == 0, "today");
+    const float full = wc24h::moonPhase(2024, 1, 25);
+    const float fresh = wc24h::moonPhase(2024, 1, 11);
+    expectGame(full > 0.45f && full < 0.55f, "full moon 2024-01-25");
+    expectGame(fresh < 0.05f || fresh > 0.95f, "new moon 2024-01-11");
+    char icon[wc24h::MOON_SIZE * wc24h::MOON_SIZE + 1];
+    wc24h::moonIcon(0.5f, icon);
+    expectGame(icon[6 * wc24h::MOON_SIZE + 6] == '7', "full moon lit");
+    wc24h::moonIcon(0.25f, icon);
+    expectGame(icon[6 * wc24h::MOON_SIZE + 9] == '7' &&
+                   icon[6 * wc24h::MOON_SIZE + 2] == '9',
+               "first quarter lit on the right");
+}
+
 int main() {
+    testAmbientAndCalendar();
+    testArcadeSmoke();
+    testArcadeRules();
     testTetris();
     testSnake();
     testCountTimer();

@@ -909,7 +909,7 @@ input:checked + .slider::before {
     border-color: rgb(133 100 4 / 28%);
 }
 
-.section-main {
+.section-home {
     display: block;
 }
 
@@ -1002,17 +1002,181 @@ input:checked + .slider::before {
     border-bottom: 1px solid #e5e5e5;
 }
 
-/* Games and timer */
-.game-select,
-.timer-buttons {
+.timer-display {
+    font-size: 3em;
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+    margin: 0.2em 0 0.4em;
+}
+
+.timer-display.finished {
+    color: #c62828;
+}
+
+/* Tiles (start page, games) */
+.tiles {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(7.5em, 1fr));
+    gap: 0.6em;
+}
+
+.tile {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.3em;
+    min-height: 5.5em;
+    padding: 0.6em 0.4em;
+    border: 1px solid var(--app-border-strong);
+    border-radius: var(--app-radius);
+    background: var(--app-surface-solid);
+    color: var(--app-text);
+    box-shadow: var(--app-shadow-soft);
+    font-size: 0.95em;
+    cursor: pointer;
+    touch-action: manipulation;
+}
+
+.tile:hover {
+    border-color: var(--app-blue);
+}
+
+.tile-icon {
+    font-size: 1.8em;
+    line-height: 1;
+}
+
+.box h3 {
+    margin: 1.1em 0 0.5em;
+    font-size: 1em;
+    color: var(--app-text-muted);
+}
+
+.hint {
+    color: var(--app-text-muted);
+    font-size: 0.9em;
+}
+
+.code {
+    overflow-x: auto;
+    padding: 0.6em;
+    border-radius: var(--app-radius);
+    background: var(--app-border);
+    font-size: 0.85em;
+}
+
+/* Live preview of the letter matrix */
+.preview {
+    display: grid;
+    grid-template-columns: repeat(18, 1fr);
+    gap: 1px;
+    max-width: 30em;
+    margin: 0 auto;
+    padding: 0.6em;
+    border-radius: var(--app-radius);
+    background: #111418;
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-size: clamp(0.55em, 2.6vw, 1em);
+    text-align: center;
+    user-select: none;
+    touch-action: none;
+}
+
+.preview span {
+    aspect-ratio: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #3a3f46;
+}
+
+.preview span.lit {
+    font-weight: bold;
+}
+
+.preview[data-tap] span {
+    cursor: pointer;
+}
+
+.status-line {
+    margin: 0.6em 0 0;
+    color: var(--app-text-muted);
+    font-size: 0.9em;
+    text-align: center;
+}
+
+/* Messages */
+.message-form {
     display: flex;
     flex-wrap: wrap;
     gap: 0.5em;
 }
 
+.message-form input[type="text"] {
+    flex: 1 1 12em;
+}
+
+.quick-messages,
+.game-actions,
+.paint-buttons,
+.timer-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5em;
+    margin-top: 0.7em;
+}
+
+/* Games */
+.game-player {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.6em 1em;
+}
+
+.player-number label {
+    margin-left: 0.6em;
+    white-space: nowrap;
+}
+
 .game-status {
     font-size: 1.2em;
     min-height: 1.5em;
+}
+
+.game-text {
+    min-height: 1.3em;
+    font-size: 1.15em;
+    letter-spacing: 0.05em;
+}
+
+.game-hint {
+    color: var(--app-text-muted);
+    font-size: 0.9em;
+}
+
+.preview-game {
+    margin-bottom: 1em;
+}
+
+.pad {
+    min-height: 4.5em;
+    font-size: 1.4em;
+    border: 1px solid var(--app-border-strong);
+    border-radius: var(--app-radius);
+    background: var(--app-surface-solid);
+    color: var(--app-text);
+    box-shadow: var(--app-shadow-soft);
+    touch-action: manipulation;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.pad:active,
+.pad.pressed {
+    background: var(--app-blue);
+    color: #fff;
 }
 
 .gamepad {
@@ -1027,52 +1191,350 @@ input:checked + .slider::before {
     margin: 1em auto;
 }
 
-.gamepad .pad {
-    min-height: 4.5em;
-    font-size: 1.4em;
-    border: 1px solid var(--app-border-strong);
-    border-radius: var(--app-radius);
-    background: var(--app-surface-solid);
-    color: var(--app-text);
-    box-shadow: var(--app-shadow-soft);
-    touch-action: manipulation;
-    user-select: none;
-    -webkit-tap-highlight-color: transparent;
+.gamepad .pad-up {
+    grid-area: up;
 }
 
-.gamepad .pad:active,
-.gamepad .pad.pressed {
-    background: var(--app-blue);
-    color: #fff;
+.gamepad .pad-left {
+    grid-area: left;
 }
-
-.gamepad .pad-up { grid-area: up; }
-.gamepad .pad-left { grid-area: left; }
 
 .gamepad .pad-action {
     grid-area: action;
     font-size: 1em;
 }
-.gamepad .pad-right { grid-area: right; }
-.gamepad .pad-down { grid-area: down; }
+
+.gamepad .pad-right {
+    grid-area: right;
+}
+
+.gamepad .pad-down {
+    grid-area: down;
+}
 
 .gamepad .pad-pause {
     grid-area: pause;
     font-size: 0.9em;
 }
 
-.game-hint {
-    color: var(--app-text-muted);
-    font-size: 0.9em;
+.simon-pad {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.6em;
+    max-width: 20em;
+    margin: 1em auto;
 }
 
-.timer-display {
-    font-size: 3em;
-    font-variant-numeric: tabular-nums;
+.simon-pad .pad {
+    min-height: 6em;
+    border: none;
+}
+
+.simon-red {
+    background: #c62828;
+}
+
+.simon-green {
+    background: #2e7d32;
+}
+
+.simon-blue {
+    background: #1565c0;
+}
+
+.simon-yellow {
+    background: #f9a825;
+}
+
+.simon-pad .pad:active,
+.simon-pad .pad.pressed {
+    filter: brightness(1.6);
+}
+
+.reaction-pad {
+    max-width: 22em;
+    margin: 1em auto;
+}
+
+.big-button {
+    width: 100%;
+    min-height: 9em;
+    font-size: 2em;
+    font-weight: bold;
+}
+
+.letter-keys {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 0.35em;
+    max-width: 26em;
+    margin: 1em auto;
+}
+
+.letter-keys button {
+    min-height: 2.8em;
+    border: 1px solid var(--app-border-strong);
+    border-radius: var(--app-radius);
+    background: var(--app-surface-solid);
+    color: var(--app-text);
+    font-size: 1.1em;
+    touch-action: manipulation;
+}
+
+.letter-keys button.right {
+    background: #2e7d32;
+    color: #fff;
+}
+
+.letter-keys button.wrong {
+    background: #c62828;
+    color: #fff;
+    opacity: 0.6;
+}
+
+.quiz-pad {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 1em;
+    margin: 1em 0;
+}
+
+.quiz-clock {
+    width: 11em;
+    height: 11em;
+}
+
+.quiz-face {
+    fill: var(--app-surface-solid);
+    stroke: var(--app-text);
+    stroke-width: 2;
+}
+
+.quiz-ticks line {
+    stroke: var(--app-text);
+    stroke-width: 2;
+}
+
+.quiz-hand {
+    stroke: var(--app-text);
+    stroke-linecap: round;
+}
+
+.quiz-hour {
+    stroke-width: 5;
+}
+
+.quiz-minute {
+    stroke-width: 3;
+    stroke: var(--app-blue);
+}
+
+.quiz-center {
+    fill: var(--app-text);
+}
+
+.quiz-inputs {
+    display: grid;
+    gap: 0.4em;
+    min-width: 12em;
+}
+
+.quiz-inputs output {
+    font-size: 1.6em;
     text-align: center;
-    margin: 0.2em 0 0.4em;
 }
 
-.timer-display.finished {
-    color: #c62828;
+.math-pad {
+    max-width: 18em;
+    margin: 1em auto;
+}
+
+.math-display {
+    display: block;
+    min-height: 1.6em;
+    margin-bottom: 0.4em;
+    font-size: 2em;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+}
+
+.keypad {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.5em;
+}
+
+.keypad .pad {
+    min-height: 3.2em;
+}
+
+.pad-ok {
+    background: var(--app-blue);
+    color: #fff;
+}
+
+.palette {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4em;
+}
+
+.palette .swatch {
+    width: 2.6em;
+    height: 2.6em;
+    border: 2px solid var(--app-border-strong);
+    border-radius: 50%;
+    cursor: pointer;
+}
+
+.palette .swatch.selected {
+    outline: 3px solid var(--app-blue);
+    outline-offset: 2px;
+}
+
+.highscores ol {
+    margin: 0;
+    padding-left: 1.5em;
+}
+
+/* Alarms */
+.alarm-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.6em 1em;
+    padding: 0.6em 0;
+    border-bottom: 1px solid var(--app-border);
+}
+
+.alarm-days label {
+    margin-right: 0.5em;
+    white-space: nowrap;
+}
+
+.alarm-ringing .box {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1em;
+    background: #fff3cd;
+    font-weight: bold;
+}
+
+/* Expert settings */
+body:not(.expert) .expert-only {
+    display: none;
+}
+
+/* Bottom navigation on phones */
+.bottom-nav {
+    display: none;
+}
+
+@media (width <= 41em) {
+    .bottom-nav {
+        position: fixed;
+        right: 0;
+        bottom: 0;
+        left: 0;
+        z-index: 20;
+        display: flex;
+        justify-content: space-around;
+        padding: 0.3em 0 calc(0.3em + env(safe-area-inset-bottom));
+        background: var(--menu-bg-solid);
+    }
+
+    .bottom-nav button {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.1em;
+        min-width: 3.5em;
+        padding: 0.2em;
+        border: none;
+        background: none;
+        color: #c8d0da;
+        font-size: 0.75em;
+    }
+
+    .bottom-nav button span:first-child {
+        font-size: 1.6em;
+    }
+
+    .bottom-nav button.active {
+        color: #fff;
+    }
+
+    .layout {
+        padding-bottom: 4.5em;
+    }
+}
+
+/* Games in landscape: pad on the left, preview/text on the right */
+@media (orientation: landscape) and (height <= 500px) {
+    .gamepad {
+        float: left;
+        margin: 0 1em 0 0;
+    }
+
+    .game-box::after {
+        content: "";
+        display: block;
+        clear: both;
+    }
+}
+
+/* Dark mode */
+:root[data-theme="dark"] {
+    --app-text: #e6eaef;
+    --app-text-muted: #9aa6b4;
+    --app-border: rgb(255 255 255 / 12%);
+    --app-border-strong: rgb(255 255 255 / 22%);
+    --app-surface: rgb(32 38 46 / 88%);
+    --app-surface-solid: #262d36;
+    --app-surface-hover: #2f3742;
+    --app-shadow: 0 14px 34px rgb(0 0 0 / 40%);
+    --app-shadow-soft: 0 8px 22px rgb(0 0 0 / 35%);
+    --app-blue: #4aa3e8;
+}
+
+:root[data-theme="dark"] body {
+    background: #14181d;
+}
+
+:root[data-theme="dark"] input,
+:root[data-theme="dark"] select {
+    background: #1d232b;
+    color: var(--app-text);
+}
+
+:root[data-theme="dark"] .alarm-ringing .box {
+    background: #5c4a10;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme]) {
+        --app-text: #e6eaef;
+        --app-text-muted: #9aa6b4;
+        --app-border: rgb(255 255 255 / 12%);
+        --app-border-strong: rgb(255 255 255 / 22%);
+        --app-surface: rgb(32 38 46 / 88%);
+        --app-surface-solid: #262d36;
+        --app-surface-hover: #2f3742;
+        --app-shadow: 0 14px 34px rgb(0 0 0 / 40%);
+        --app-shadow-soft: 0 8px 22px rgb(0 0 0 / 35%);
+        --app-blue: #4aa3e8;
+    }
+
+    :root:not([data-theme]) body {
+        background: #14181d;
+    }
+
+    :root:not([data-theme]) input,
+    :root:not([data-theme]) select {
+        background: #1d232b;
+        color: var(--app-text);
+    }
 }

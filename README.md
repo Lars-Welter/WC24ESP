@@ -154,19 +154,59 @@ Hinweise zur Portierung:
 
 ## Zusätzliche Funktionen
 
-* **Spiele & Timer** (eigener Menüpunkt der Weboberfläche): Tetris und Snake
-  auf der Buchstabenmatrix, gesteuert über ein Steuerkreuz auf dem Handy oder
-  die Pfeiltasten am PC (Leertaste lässt fallen, P pausiert). Dazu Countdown
-  (bis 99:59, blinkt am Ende) und Stoppuhr, beide als MM:SS. Nach Spielende
-  oder „Beenden" kehrt die Uhr zur Uhrzeit zurück.
-  `http://<Uhr>/#games` öffnet die Seite direkt; über „Zum Startbildschirm
-  hinzufügen" liegt sie auf dem Handy wie eine App.
-* **Digitaluhr** (*Anzeigeoptionen → Digitaluhr*): Doppelpunkt blinkend,
-  dauerhaft oder aus, 12-/24-Stunden-Anzeige, führende Null abschaltbar,
-  Sekundenbalken zwischen den Ziffernzeilen, Ziffern zentriert statt versetzt.
-* **Boot** (*Anzeigeoptionen → Boot*): Geschwindigkeit 1–10 für das
-  Aufblitzen und den LED-Durchlauf beim Start (6 entspricht dem bisherigen
-  Tempo).
+Die Weboberfläche startet mit einer **Startseite**: Live-Vorschau der
+Buchstaben (zeigt, was gerade auf der Uhr leuchtet), Statuszeile (Modus, WLAN,
+Anzeige an/aus), Schnellzugriff, *Nachricht an die Uhr* und *Stimmung*. Auf dem
+Handy gibt es eine Navigationsleiste unten. Unter *Einstellungen →
+Darstellung* lassen sich der Dunkelmodus wählen und technische Einstellungen
+(LED-Typ, Pins, Zeitserver, Hostname, MQTT …) per *Experteneinstellungen*
+ein- und ausblenden. `http://<Uhr>/#games` bzw. `#extras` öffnet eine Seite
+direkt; über „Zum Startbildschirm hinzufügen" liegt die Weboberfläche auf dem
+Handy wie eine App.
+
+**Spiele & Timer** — gespielt wird auf der Buchstabenmatrix, gesteuert vom
+Handy (Steuerkreuz, Farbtasten, Tastatur …) oder am PC mit den Pfeiltasten:
+
+| Gruppe | Spiele |
+| --- | --- |
+| Action | Tetris, Snake, Flappy Vogel, Breakout, Weltraum-Invasion, Frosch über die Straße, Farben merken (Simon) |
+| Zu zweit | Pong (zwei Handys oder gegen die Uhr), Vier gewinnt (zu zweit oder gegen die Uhr), Reaktionsduell |
+| Rätseln & Lernen | Galgenmännchen (geratene Buchstaben leuchten auf der Uhr), Uhrzeit-Quiz (Uhrzeit in Worten lesen, an einer Analoguhr einstellen), Wörter finden (Buchstaben in der Vorschau antippen), Kopfrechnen |
+| Kreativ | Malbrett — was in der Vorschau gemalt wird, erscheint auf der Uhr |
+
+Für Zwei-Spieler-Spiele wählt jedes Handy oben „Spieler 1" oder „Spieler 2".
+Einzelspiele haben eine **Bestenliste** (fünf Plätze je Spiel, im Flash des
+ESP32 gespeichert, Name aus der App). Treffer und Spielende vibrieren auf dem
+Handy. Dazu **Countdown** (bis 99:59, blinkt am Ende) und **Stoppuhr**.
+
+**Wecker & Extras**
+
+* **Wecker**: vier Weckzeiten mit Wochentagen; die Uhr weckt mit Licht
+  (Sonnenaufgang über 3 Minuten, Blinken, Feuerwerk, Lavalampe, Kaminfeuer,
+  Sternenhimmel). Der Taster am SP803E oder „Wecker aus" in der App beendet es,
+  sonst nach 5 Minuten.
+* **Nachricht an die Uhr**: Text vom Handy als Laufschrift, 1–5 Durchläufe,
+  mit Schnelltasten wie „Essen ist fertig".
+* **Stimmung**: Lavalampe, Kaminfeuer, Schneefall, Feuerwerk, Sternenhimmel,
+  Regen — bleibt an, bis ein anderer Modus gewählt wird.
+* **Lern-Farben**: die Stundenwörter in einer zweiten Farbe.
+* **Silvester**: auf Wunsch Feuerwerk um 0:00 Uhr am 1. Januar.
+* **Einblendungen** (*Anzeigeoptionen → WordClock24h*): zusätzlich
+  „Tage bis …" (z. B. `NOCH 12 TAGE: FERIEN`, `MORGEN: …`, `HEUTE: …`) und
+  die aktuelle **Mondphase** als Symbol.
+* **Hinweise aus Home Assistant** per MQTT an `<Topic>/cmd`:
+  `{"notify_text": "WASCHMASCHINE FERTIG"}` als Laufschrift oder
+  `{"notify_icon": 0}` für eines der Symbole (0 = Herz … 7).
+
+**Digitaluhr** (*Anzeigeoptionen → Digitaluhr*): Doppelpunkt blinkend,
+dauerhaft oder aus, 12-/24-Stunden-Anzeige, führende Null abschaltbar,
+Sekundenbalken zwischen den Ziffernzeilen, Ziffern zentriert statt versetzt.
+
+**Boot** (*Anzeigeoptionen → Boot*): Geschwindigkeit 1–10 für das Aufblitzen
+und den LED-Durchlauf beim Start (6 entspricht dem bisherigen Tempo).
+
+Spiele, Timer, Nachrichten, Stimmungen und der Wecker sind vorübergehend: nach
+einem Neustart zeigt die Uhr wieder die Uhrzeit.
 
 ## Voreinstellungen dieser Variante
 

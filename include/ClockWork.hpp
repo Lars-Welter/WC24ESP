@@ -4,6 +4,9 @@
 #include "OpenWeatherMap.h"
 #include "SensitiveData.h"
 #include "TransitionTypes/Transition.h"
+#include "WC24h/Ambient.h"
+#include "WC24h/Arcade.h"
+#include "WC24h/Calendar.h"
 #include "WC24h/CurrentWeather.h"
 #include "WC24h/Games.h"
 #include "WC24h/NightTimer.h"
@@ -15,6 +18,11 @@
 #include "math.h"
 #include <Arduino.h>
 #include <BH1750.h>
+#include <Preferences.h>
+
+namespace {
+void stopAlarm();
+} // namespace
 
 #define MAX_LED_COUNT 300
 
@@ -227,6 +235,11 @@ void ClockWork::requestHardwareButtonDisplayRefresh() {
 //------------------------------------------------------------------------------
 
 void ClockWork::handleHardwareButtonAction(HardwareButtonAction action) {
+    if (G.prog == COMMAND_MODE_ALARM &&
+        action != HardwareButtonAction::None) {
+        stopAlarm(); // any key ends the alarm
+        return;
+    }
     switch (action) {
     case HardwareButtonAction::TogglePower:
         toggleHardwareButtonPower();
@@ -1623,7 +1636,7 @@ struct OverlayState {
     uint32_t durationMs = 0;
     bool ticker = false;
     float celsius = 0.f;
-    char text[32] = {};
+    char text[48] = {};
 } overlayState;
 
 constexpr uint32_t OVERLAY_ICON_FADE_MS = 2000;
@@ -1695,6 +1708,41 @@ bool ClockWork::beginOverlay(const wc24h::Overlay &overlay,
         overlayState.ticker = overlayState.text[0] != '\0';
         return overlayState.ticker;
 
+    case wc24h::OVERLAY_DAYS_UNTIL: {
+        if (overlay.month < 1 || overlay.month > 12 || overlay.day < 1 ||
+            overlay.day > 31) {
+            return false;
+        }
+        const int32_t days =
+            wc24h::daysUntil(tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday,
+                             overlay.month, overlay.day);
+        if (days == 0) {
+            snprintf(overlayState.text, sizeof(overlayState.text), "HEUTE: %s",
+                     overlay.text);
+        } else if (days == 1) {
+            snprintf(overlayState.text, sizeof(overlayState.text),
+                     "MORGEN: %s", overlay.text);
+        } else {
+            snprintf(overlayState.text, sizeof(overlayState.text),
+                     "NOCH %ld TAGE: %s", static_cast<long>(days),
+                     overlay.text);
+        }
+        overlayState.ticker = true;
+        return true;
+    }
+
+    case wc24h::OVERLAY_MOON: {
+        static char moonColors[wc24h::MOON_SIZE * wc24h::MOON_SIZE + 1];
+        static const wc24h::Icon moonIcon = {"Moon", wc24h::MOON_SIZE,
+                                             wc24h::MOON_SIZE, moonColors,
+                                             nullptr, nullptr};
+        wc24h::moonIcon(wc24h::moonPhase(tm.tm_year + 1900, tm.tm_mon + 1,
+                                         tm.tm_mday),
+                        moonColors);
+        overlayState.icon = &moonIcon;
+        return true;
+    }
+
     case wc24h::OVERLAY_TEMPERATURE:
     case wc24h::OVERLAY_TEMPERATURE_DIGITS: {
         if (!readTemperature(overlayState.celsius)) {
@@ -1716,6 +1764,41 @@ bool ClockWork::beginOverlay(const wc24h::Overlay &overlay,
     default:
         return false;
     }
+}
+
+//------------------------------------------------------------------------------
+// Notification from Home Assistant / MQTT: an icon (index into wc24h::ICONS)
+// or a scrolling text, shown once on top of the word clock.
+
+void ClockWork::showNotification(int16_t icon, const char *text) {
+    if (!led.getState() || overlayActive ||
+        (G.prog != COMMAND_IDLE && G.prog != COMMAND_MODE_WORD_CLOCK)) {
+        return;
+    }
+    static wc24h::Overlay notification;
+    memset(&notification, 0, sizeof(notification));
+    notification.flags = wc24h::OVERLAY_FLAG_ACTIVE;
+    notification.duration = 8;
+    if (icon >= 0 && icon < wc24h::ICON_COUNT) {
+        notification.type = wc24h::OVERLAY_ICON;
+        notification.icon = icon;
+    } else if (text && text[0]) {
+        notification.type = wc24h::OVERLAY_TICKER;
+        strlcpy(notification.text, text, sizeof(notification.text));
+    } else {
+        return;
+    }
+    const time_t now = time(nullptr);
+    struct tm tm;
+    localtime_r(&now, &tm);
+    if (!beginOverlay(notification, tm)) {
+        return;
+    }
+    overlayActive = true;
+    overlayState.startMillis = millis();
+    overlayState.lastFrameMillis = 0;
+    led.clear();
+    led.show();
 }
 
 //------------------------------------------------------------------------------
@@ -1889,34 +1972,63 @@ void ClockWork::clearClockByProgInit() {
 }
 
 //------------------------------------------------------------------------------
-// Games and timer (Tetris, Snake, countdown, stopwatch)
+// Games, timer, messages, mood animations and alarm clock
 //------------------------------------------------------------------------------
 
 namespace {
 
-wc24h::Tetris tetris;
-wc24h::Snake snake;
-wc24h::CountTimer countTimer;
+wc24h::TetrisGame tetrisGame;
+wc24h::SnakeGame snakeGame;
+wc24h::SimonGame simonGame;
+wc24h::FlappyGame flappyGame;
+wc24h::BreakoutGame breakoutGame;
+wc24h::InvadersGame invadersGame;
+wc24h::FroggerGame froggerGame;
+wc24h::PongGame pongGame;
+wc24h::Connect4Game connect4Game;
+wc24h::ReactionGame reactionGame;
+wc24h::HangmanGame hangmanGame;
+wc24h::ClockQuizGame clockQuizGame;
+wc24h::WordFindGame wordFindGame;
+wc24h::MathGame mathGame;
+wc24h::PaintGame paintGame;
 
-uint8_t activeGame = wc24h::GAME_NONE;
+wc24h::ArcadeGame *game = nullptr;
+uint8_t gameId = wc24h::GAME_NONE;
+char gameName[9] = "";
 bool gamePaused = false;
-bool gameNeedsDraw = false;
-uint32_t gameLastStepMillis = 0;
+uint32_t gameLastDraw = 0;
 uint32_t gameOverMillis = 0;
-uint32_t gameReportedScore = UINT32_MAX;
+int8_t gameRank = 0; // place in the high score list, 0 = none
+wc24h::GameStatus gameReported;
 bool gameReportedOver = false;
 bool gameReportedPaused = false;
+uint32_t gameLastReport = 0;
+wc24h::Canvas gameCanvas;
 
+wc24h::CountTimer countTimer;
 uint32_t timerShownSeconds = UINT32_MAX;
 uint32_t timerFinishedMillis = 0;
 bool timerReportedRunning = false;
 
-constexpr uint32_t GAME_OVER_SHOW_MS = 4000;
-constexpr uint32_t TIMER_ALARM_MS = 15000;
+wc24h::Ambient ambient;
+wc24h::RgbFrame ambientFrame;
+uint32_t ambientLastFrame = 0;
+uint32_t ambientUntil = 0; // 0 = until another mode is chosen
 
-// Usual Tetris colors for I, J, L, O, S, T, Z.
-const float TETRIS_HUES[wc24h::TETRIS_PIECES] = {0.50f, 0.66f, 0.08f, 0.16f,
-                                                 0.33f, 0.80f, 0.00f};
+int16_t messageOffset = 0;
+uint8_t messagePass = 0;
+uint32_t messageLastStep = 0;
+
+uint32_t alarmStartMillis = 0;
+
+constexpr uint32_t GAME_OVER_BLINK_MS = 2500;
+constexpr uint32_t GAME_OVER_SCORE_MS = 3000;
+constexpr uint32_t TIMER_ALARM_MS = 15000;
+constexpr uint32_t ALARM_RING_MS = 5UL * 60UL * 1000UL;
+constexpr uint32_t NEW_YEAR_FIREWORKS_MS = 90UL * 1000UL;
+constexpr uint8_t HIGHSCORE_COUNT = 5;
+const char *const HIGHSCORE_NAMESPACE = "wc24h-hs";
 
 // Digital clock with the 12/24 hour and leading zero options applied.
 void showDigitalTime() {
@@ -1943,8 +2055,10 @@ float gameBrightness() {
 }
 
 void returnToWordClock() {
-    activeGame = wc24h::GAME_NONE;
+    game = nullptr;
+    gameId = wc24h::GAME_NONE;
     countTimer.stop();
+    ambient.effect = wc24h::AMBIENT_NONE;
     G.prog = COMMAND_MODE_WORD_CLOCK;
     G.progInit = true;
     parametersChanged = true;
@@ -1956,33 +2070,338 @@ void broadcastJson(const JsonDocument &doc) {
     webSocket.broadcastTXT(payload);
 }
 
+//------------------------------------------------------------------------------
+// Drawing
+
+HsbColor paletteColor(uint8_t index, float brightness) {
+    struct Entry {
+        float h, s, v;
+    };
+    static const Entry PALETTE[wc24h::PAL_COUNT] = {
+        {0.f, 0.f, 0.f},     {0.f, 1.f, 1.f},     {0.07f, 1.f, 1.f},
+        {0.15f, 1.f, 1.f},   {0.33f, 1.f, 1.f},   {0.5f, 1.f, 1.f},
+        {0.66f, 1.f, 1.f},   {0.78f, 1.f, 1.f},   {0.9f, 0.7f, 1.f},
+        {0.f, 0.f, 1.f},     {0.f, 0.f, 0.25f},   {0.f, 1.f, 0.3f},
+        {0.33f, 1.f, 0.3f},  {0.66f, 1.f, 0.35f}, {0.15f, 1.f, 0.3f},
+    };
+    const Entry &e = PALETTE[index < wc24h::PAL_COUNT ? index : 0];
+    return HsbColor(e.h, e.s, e.v * brightness);
+}
+
+void drawCanvas(const wc24h::Canvas &canvas) {
+    const float bri = gameBrightness();
+    for (uint8_t row = 0; row < wc24h::GAME_ROWS; row++) {
+        for (uint8_t col = 0; col < wc24h::GAME_COLS; col++) {
+            led.setPixel(row, col, paletteColor(canvas.cell[row][col], bri));
+        }
+    }
+    led.show();
+}
+
+void drawRgbFrame(const wc24h::RgbFrame &frame) {
+    const float bri = gameBrightness();
+    for (uint8_t row = 0; row < wc24h::GAME_ROWS; row++) {
+        for (uint8_t col = 0; col < wc24h::GAME_COLS; col++) {
+            const wc24h::Rgb &p = frame.px[row][col];
+            HsbColor color(RgbColor(p.r, p.g, p.b));
+            color.B *= bri;
+            led.setPixel(row, col, color);
+        }
+    }
+    led.show();
+}
+
+//------------------------------------------------------------------------------
+// High scores, kept in the ESP32 NVS (Preferences), five per game
+
+struct HighscoreEntry {
+    char name[9];
+    uint32_t score;
+};
+
+void loadHighscores(uint8_t id, HighscoreEntry *list) {
+    memset(list, 0, sizeof(HighscoreEntry) * HIGHSCORE_COUNT);
+    Preferences prefs;
+    if (!prefs.begin(HIGHSCORE_NAMESPACE, true)) {
+        return; // nothing stored yet
+    }
+    char key[8];
+    snprintf(key, sizeof(key), "g%u", id);
+    prefs.getBytes(key, list, sizeof(HighscoreEntry) * HIGHSCORE_COUNT);
+    prefs.end();
+    for (uint8_t i = 0; i < HIGHSCORE_COUNT; i++) {
+        list[i].name[8] = '\0';
+    }
+}
+
+// Returns the place 1..5, or 0 when the score is not good enough.
+int8_t saveHighscore(uint8_t id, const char *name, uint32_t score) {
+    if (!score) {
+        return 0;
+    }
+    HighscoreEntry list[HIGHSCORE_COUNT];
+    loadHighscores(id, list);
+    int8_t place = -1;
+    for (uint8_t i = 0; i < HIGHSCORE_COUNT; i++) {
+        if (score > list[i].score) {
+            place = i;
+            break;
+        }
+    }
+    if (place < 0) {
+        return 0;
+    }
+    memmove(&list[place + 1], &list[place],
+            sizeof(HighscoreEntry) * (HIGHSCORE_COUNT - 1 - place));
+    memset(&list[place], 0, sizeof(HighscoreEntry));
+    strlcpy(list[place].name, name[0] ? name : "?", sizeof(list[place].name));
+    list[place].score = score;
+    Preferences prefs;
+    if (prefs.begin(HIGHSCORE_NAMESPACE, false)) {
+        char key[8];
+        snprintf(key, sizeof(key), "g%u", id);
+        prefs.putBytes(key, list, sizeof(list));
+        prefs.end();
+    }
+    return place + 1;
+}
+
+// client < 0: to everybody
+void sendHighscores(uint8_t id, int16_t client) {
+    HighscoreEntry list[HIGHSCORE_COUNT];
+    loadHighscores(id, list);
+    StaticJsonDocument<512> doc;
+    doc["command"] = "highscores";
+    doc["game"] = id;
+    JsonArray array = doc.createNestedArray("list");
+    for (const HighscoreEntry &entry : list) {
+        if (!entry.score) {
+            break;
+        }
+        JsonObject item = array.createNestedObject();
+        item["name"] = entry.name;
+        item["score"] = entry.score;
+    }
+    if (client < 0) {
+        broadcastJson(doc);
+    } else {
+        sendJsonToClient(client, doc);
+    }
+}
+
+//------------------------------------------------------------------------------
+// Games
+
+wc24h::ArcadeGame *gameFor(uint8_t id) {
+    switch (id) {
+    case wc24h::GAME_TETRIS:
+        return &tetrisGame;
+    case wc24h::GAME_SNAKE:
+        return &snakeGame;
+    case wc24h::GAME_SIMON:
+        return &simonGame;
+    case wc24h::GAME_FLAPPY:
+        return &flappyGame;
+    case wc24h::GAME_BREAKOUT:
+        return &breakoutGame;
+    case wc24h::GAME_INVADERS:
+        return &invadersGame;
+    case wc24h::GAME_FROGGER:
+        return &froggerGame;
+    case wc24h::GAME_PONG:
+    case wc24h::GAME_PONG_CPU:
+        pongGame.cpu = id == wc24h::GAME_PONG_CPU;
+        return &pongGame;
+    case wc24h::GAME_CONNECT4:
+    case wc24h::GAME_CONNECT4_CPU:
+        connect4Game.cpu = id == wc24h::GAME_CONNECT4_CPU;
+        return &connect4Game;
+    case wc24h::GAME_REACTION:
+        return &reactionGame;
+    case wc24h::GAME_HANGMAN:
+        return &hangmanGame;
+    case wc24h::GAME_CLOCK_QUIZ:
+        clockQuizGame.displayMode =
+            G.wc24hDisplayMode < wc24h::CLOCK_MODES_COUNT ? G.wc24hDisplayMode
+                                                         : 13;
+        return &clockQuizGame;
+    case wc24h::GAME_WORD_FIND:
+        return &wordFindGame;
+    case wc24h::GAME_MATH:
+        return &mathGame;
+    case wc24h::GAME_PAINT:
+        return &paintGame;
+    default:
+        return nullptr;
+    }
+}
+
 void reportGame(bool force = false) {
-    const bool over = activeGame == wc24h::GAME_TETRIS ? tetris.over
-                                                       : snake.over;
-    const uint32_t score =
-        activeGame == wc24h::GAME_TETRIS ? tetris.score : snake.score;
-    if (!force && score == gameReportedScore && over == gameReportedOver &&
-        gamePaused == gameReportedPaused) {
+    if (!game) {
         return;
     }
-    gameReportedScore = score;
-    gameReportedOver = over;
-    gameReportedPaused = gamePaused;
-
-    StaticJsonDocument<192> doc;
-    doc["command"] = "game";
-    doc["game"] = activeGame;
-    doc["score"] = score;
-    doc["over"] = over;
-    doc["paused"] = gamePaused;
-    if (activeGame == wc24h::GAME_TETRIS) {
-        doc["lines"] = tetris.lines;
-        doc["level"] = tetris.level();
-    } else {
-        doc["length"] = snake.length;
+    wc24h::GameStatus status;
+    game->status(status);
+    const uint32_t now = millis();
+    const bool changed =
+        memcmp(&status, &gameReported, sizeof(status)) != 0 ||
+        game->over != gameReportedOver || gamePaused != gameReportedPaused;
+    if (!force && (!changed || now - gameLastReport < 100)) {
+        return;
     }
+    gameReported = status;
+    gameReportedOver = game->over;
+    gameReportedPaused = gamePaused;
+    gameLastReport = now;
+
+    StaticJsonDocument<384> doc;
+    doc["command"] = "game";
+    doc["game"] = gameId;
+    doc["score"] = status.score;
+    doc["over"] = game->over;
+    doc["paused"] = gamePaused;
+    if (status.lives >= 0) {
+        doc["lives"] = status.lives;
+    }
+    if (status.level) {
+        doc["level"] = status.level;
+    }
+    if (game->twoPlayer) {
+        doc["score1"] = status.score1;
+        doc["score2"] = status.score2;
+        doc["turn"] = status.turn;
+    }
+    doc["winner"] = status.winner;
+    doc["text"] = status.text;
+    doc["text2"] = status.text2;
+    doc["rank"] = gameRank;
     broadcastJson(doc);
 }
+
+void startGame(uint8_t id) {
+    game = gameFor(id);
+    if (!game) {
+        id = wc24h::GAME_TETRIS;
+        game = &tetrisGame;
+    }
+    gameId = id;
+    strlcpy(gameName, gamePlayerName, sizeof(gameName));
+    game->start(esp_random(), millis());
+    gamePaused = false;
+    gameOverMillis = 0;
+    gameRank = 0;
+    gameKeyCount = 0;
+    gameLastDraw = 0;
+    reportGame(true);
+}
+
+// Final screen: the score, or the winner's color for two players.
+void drawGameResult() {
+    wc24h::GameStatus status;
+    game->status(status);
+    gameCanvas.clear();
+    if (game->twoPlayer) {
+        const bool connect4 = gameId == wc24h::GAME_CONNECT4 ||
+                              gameId == wc24h::GAME_CONNECT4_CPU;
+        uint8_t color = wc24h::PAL_WHITE;
+        if (status.winner == 1) {
+            color = connect4 ? wc24h::PAL_RED : wc24h::PAL_BLUE;
+        } else if (status.winner == 2) {
+            color = connect4 ? wc24h::PAL_YELLOW : wc24h::PAL_ORANGE;
+        }
+        if (connect4) {
+            gameCanvas.fill(2, 2, 12, 14, color);
+        } else {
+            char line[8];
+            snprintf(line, sizeof(line), "%u:%u", status.score1,
+                     status.score2);
+            gameCanvas.centeredText(5, line, color);
+        }
+    } else {
+        wc24h::drawScore(gameCanvas, status.score,
+                         gameRank ? wc24h::PAL_GREEN : wc24h::PAL_YELLOW);
+    }
+    drawCanvas(gameCanvas);
+}
+
+void loopGame() {
+    const uint32_t now = millis();
+
+    if (gameRequest != wc24h::GAME_NONE) {
+        startGame(gameRequest);
+        gameRequest = wc24h::GAME_NONE;
+    }
+    if (!game) {
+        startGame(wc24h::GAME_TETRIS);
+    }
+
+    bool changed = false;
+    for (uint8_t i = 0; i < gameKeyCount; i++) {
+        const GameKeyEvent &event = gameKeyQueue[i];
+        if (game->over) {
+            continue;
+        }
+        if (event.key == wc24h::GAME_KEY_PAUSE) {
+            if (game->pausable) {
+                gamePaused = !gamePaused;
+                changed = true;
+            }
+            continue;
+        }
+        if (gamePaused) {
+            continue;
+        }
+        game->input({event.key, event.player, event.value}, now);
+        changed = true;
+    }
+    gameKeyCount = 0;
+
+    if (!game->over && !gamePaused) {
+        changed |= game->update(now);
+    }
+
+    if (game->over) {
+        if (gameOverMillis == 0) {
+            gameOverMillis = now;
+            if (wc24h::gameHasHighscore(gameId)) {
+                wc24h::GameStatus status;
+                game->status(status);
+                gameRank = saveHighscore(gameId, gameName, status.score);
+                reportGame(true);
+                sendHighscores(gameId, -1);
+            }
+        }
+        const uint32_t elapsed = now - gameOverMillis;
+        if (elapsed < GAME_OVER_BLINK_MS) {
+            const bool visible = (elapsed / 300) % 2 == 0;
+            if (visible) {
+                game->render(gameCanvas, now);
+                drawCanvas(gameCanvas);
+            } else {
+                led.clear();
+                led.show();
+            }
+        } else if (elapsed < GAME_OVER_BLINK_MS + GAME_OVER_SCORE_MS) {
+            drawGameResult();
+        } else {
+            reportGame(true);
+            returnToWordClock();
+            return;
+        }
+        reportGame();
+        return;
+    }
+
+    if (changed || now - gameLastDraw >= 100) {
+        game->render(gameCanvas, now);
+        drawCanvas(gameCanvas);
+        gameLastDraw = now;
+    }
+    reportGame();
+}
+
+//------------------------------------------------------------------------------
+// Timer
 
 void reportTimer(uint32_t seconds) {
     StaticJsonDocument<128> doc;
@@ -1994,159 +2413,197 @@ void reportTimer(uint32_t seconds) {
     broadcastJson(doc);
 }
 
-void drawTetris() {
-    const float bri = gameBrightness();
-    const HsbColor wall(0.f, 0.f, bri * 0.25f);
-    const HsbColor off(0.f, 0.f, 0.f);
-    for (uint8_t row = 0; row < wc24h::GAME_ROWS; row++) {
-        for (uint8_t col = 0; col < wc24h::GAME_COLS; col++) {
-            if (col == wc24h::TETRIS_OFFSET - 1 ||
-                col == wc24h::TETRIS_OFFSET + wc24h::TETRIS_COLS) {
-                led.setPixel(row, col, wall);
-                continue;
-            }
-            if (col < wc24h::TETRIS_OFFSET ||
-                col >= wc24h::TETRIS_OFFSET + wc24h::TETRIS_COLS) {
-                led.setPixel(row, col, off);
-                continue;
-            }
-            const uint8_t cell = tetris.cell(row, col - wc24h::TETRIS_OFFSET);
-            led.setPixel(row, col,
-                         cell ? HsbColor(TETRIS_HUES[cell - 1], 1.f, bri)
-                              : off);
-        }
-    }
-    led.show();
+//------------------------------------------------------------------------------
+// Message: scrolls a text from the phone across the front
+
+void startMessage() {
+    messageOffset = wc24h::GAME_COLS;
+    messagePass = 0;
+    messageLastStep = 0;
 }
 
-void drawSnake() {
-    const float bri = gameBrightness();
-    const HsbColor off(0.f, 0.f, 0.f);
-    for (uint8_t row = 0; row < wc24h::GAME_ROWS; row++) {
-        for (uint8_t col = 0; col < wc24h::GAME_COLS; col++) {
-            led.setPixel(row, col, off);
-        }
-    }
-    const uint16_t food = snake.food;
-    led.setPixel(food / wc24h::GAME_COLS, food % wc24h::GAME_COLS,
-                 HsbColor(0.f, 1.f, bri));
-    for (uint16_t i = snake.length; i-- > 0;) {
-        const uint16_t c = snake.segment(i);
-        // Bright head, body fading slightly towards the tail.
-        const HsbColor color = i == 0 ? HsbColor(0.25f, 1.f, bri)
-                                      : HsbColor(0.33f, 1.f, bri * 0.6f);
-        led.setPixel(c / wc24h::GAME_COLS, c % wc24h::GAME_COLS, color);
-    }
-    led.show();
-}
-
-void drawGame() {
-    if (activeGame == wc24h::GAME_TETRIS) {
-        drawTetris();
-    } else {
-        drawSnake();
-    }
-}
-
-void startGame(uint8_t game) {
-    activeGame = game == wc24h::GAME_SNAKE ? wc24h::GAME_SNAKE
-                                           : wc24h::GAME_TETRIS;
-    const uint32_t seed = esp_random();
-    if (activeGame == wc24h::GAME_TETRIS) {
-        tetris.start(seed);
-    } else {
-        snake.start(seed);
-    }
-    gamePaused = false;
-    gameOverMillis = 0;
-    gameLastStepMillis = millis();
-    gameKeyCount = 0;
-    gameNeedsDraw = true;
-    reportGame(true);
-}
-
-void loopGame() {
+void loopMessage() {
     const uint32_t now = millis();
-
-    if (gameRequest != wc24h::GAME_NONE) {
-        startGame(gameRequest);
-        gameRequest = wc24h::GAME_NONE;
-    }
-    if (activeGame == wc24h::GAME_NONE) {
-        startGame(wc24h::GAME_TETRIS);
-    }
-
-    const bool over =
-        activeGame == wc24h::GAME_TETRIS ? tetris.over : snake.over;
-
-    for (uint8_t i = 0; i < gameKeyCount; i++) {
-        const uint8_t key = gameKeyQueue[i];
-        if (over) {
-            continue;
-        }
-        if (key == wc24h::GAME_KEY_PAUSE) {
-            gamePaused = !gamePaused;
-            gameLastStepMillis = now;
-            continue;
-        }
-        if (gamePaused) {
-            continue;
-        }
-        if (activeGame == wc24h::GAME_TETRIS) {
-            tetris.input(key);
-        } else {
-            snake.input(key);
-        }
-        gameNeedsDraw = true;
-    }
-    gameKeyCount = 0;
-
-    if (!over && !gamePaused) {
-        const uint16_t interval = activeGame == wc24h::GAME_TETRIS
-                                      ? tetris.intervalMs()
-                                      : snake.intervalMs();
-        if (now - gameLastStepMillis >= interval) {
-            gameLastStepMillis = now;
-            if (activeGame == wc24h::GAME_TETRIS) {
-                tetris.step();
-            } else {
-                snake.step();
-            }
-            gameNeedsDraw = true;
-        }
-    }
-
-    const bool nowOver =
-        activeGame == wc24h::GAME_TETRIS ? tetris.over : snake.over;
-    if (nowOver) {
-        if (gameOverMillis == 0) {
-            gameOverMillis = now;
-        }
-        // Blink the final board, then go back to the clock.
-        const bool visible = ((now - gameOverMillis) / 300) % 2 == 0;
-        static bool lastVisible = true;
-        if (visible != lastVisible || gameNeedsDraw) {
-            lastVisible = visible;
-            if (visible) {
-                drawGame();
-            } else {
-                led.clear();
-                led.show();
-            }
-            gameNeedsDraw = false;
-        }
-        reportGame();
-        if (now - gameOverMillis >= GAME_OVER_SHOW_MS) {
-            returnToWordClock();
-        }
+    if (now - messageLastStep < 70) {
         return;
     }
+    messageLastStep = now;
 
-    if (gameNeedsDraw) {
-        drawGame();
-        gameNeedsDraw = false;
+    const size_t len = strlen(messageText);
+    if (!len) {
+        returnToWordClock();
+        return;
     }
-    reportGame();
+    const int16_t width = len * 6;
+    const uint8_t top = (wc24h::GAME_ROWS - 7) / 2;
+    const HsbColor on = led.getColorbyPositionWithAppliedBrightness(Foreground);
+    const HsbColor off(0.f, 0.f, 0.f);
+    for (uint8_t col = 0; col < wc24h::GAME_COLS; col++) {
+        const int16_t x = col - messageOffset;
+        const bool inside = x >= 0 && x < width && x % 6 < 5;
+        const unsigned char ch =
+            inside ? static_cast<unsigned char>(messageText[x / 6]) : ' ';
+        for (uint8_t row = 0; row < wc24h::GAME_ROWS; row++) {
+            const bool lit = inside && row >= top && row < top + 7 &&
+                             led.getCharCol(normalSizeASCII, x % 6, row - top,
+                                            ch);
+            led.setPixel(row, col, lit ? on : off);
+        }
+    }
+    led.show();
+
+    if (--messageOffset < -width) {
+        messageOffset = wc24h::GAME_COLS;
+        if (++messagePass >= messageRepeats) {
+            returnToWordClock();
+        }
+    }
+}
+
+//------------------------------------------------------------------------------
+// Mood animations, also used for the alarm clock and New Year's fireworks
+
+void startAmbient(uint8_t effect, uint32_t durationMs) {
+    const uint32_t now = millis();
+    ambient.start(effect, esp_random(), now);
+    ambientFrame.clear();
+    ambientLastFrame = 0;
+    ambientUntil = durationMs ? now + durationMs : 0;
+}
+
+void loopAmbient() {
+    const uint32_t now = millis();
+    if (ambientRequest) {
+        startAmbient(ambientRequest, 0);
+        ambientRequest = 0;
+    }
+    if (ambient.effect == wc24h::AMBIENT_NONE) {
+        startAmbient(wc24h::AMBIENT_LAVA, 0);
+    }
+    if (ambientUntil && static_cast<int32_t>(now - ambientUntil) >= 0) {
+        returnToWordClock();
+        return;
+    }
+    if (now - ambientLastFrame < ambient.frameMs()) {
+        return;
+    }
+    ambientLastFrame = now;
+    ambient.render(ambientFrame, now);
+    drawRgbFrame(ambientFrame);
+}
+
+void reportAlarm(bool ringing) {
+    StaticJsonDocument<64> doc;
+    doc["command"] = "alarm";
+    doc["ringing"] = ringing;
+    broadcastJson(doc);
+}
+
+void stopAlarm() {
+    reportAlarm(false);
+    returnToWordClock();
+}
+
+// Called once per minute.
+void checkAlarms(const struct tm &tm) {
+    for (const AlarmSetting &alarm : G.alarms) {
+        if (!(alarm.flags & ALARM_ACTIVE) ||
+            !(alarm.flags & (1u << tm.tm_wday)) || alarm.hour != tm.tm_hour ||
+            alarm.minute != tm.tm_min) {
+            continue;
+        }
+        if (!led.getState()) {
+            led.setState(true);
+        }
+        overlayActive = false;
+        G.prog = COMMAND_MODE_ALARM;
+        G.progInit = true;
+        alarmStartMillis = millis();
+        startAmbient(alarm.effect ? alarm.effect : wc24h::AMBIENT_SUNRISE,
+                     ALARM_RING_MS);
+        reportAlarm(true);
+        return;
+    }
+    if ((G.wordColorFlags & WORD_COLORS_NEW_YEAR) && tm.tm_mon == 0 &&
+        tm.tm_mday == 1 && tm.tm_hour == 0 && tm.tm_min == 0 &&
+        (G.prog == COMMAND_IDLE || G.prog == COMMAND_MODE_WORD_CLOCK)) {
+        overlayActive = false;
+        G.prog = COMMAND_MODE_AMBIENT;
+        G.progInit = true;
+        startAmbient(wc24h::AMBIENT_FIREWORKS, NEW_YEAR_FIREWORKS_MS);
+    }
+}
+
+void loopAlarm() {
+    loopAmbient();
+    if (G.prog != COMMAND_MODE_ALARM) {
+        reportAlarm(false); // the ringing time is over
+    }
+}
+
+//------------------------------------------------------------------------------
+// Live picture for the web page: 288 pixels as hex, row by row from the
+// top left.
+
+void sendFrame(uint8_t client) {
+    static char buffer[64 + wc24h::GAME_ROWS * wc24h::GAME_COLS * 6];
+    const uint8_t perLetter = getLedsPerLetter(G.buildTypeDef);
+    int n = snprintf(buffer, sizeof(buffer),
+                     "{\"command\":\"frame\",\"prog\":%u,\"power\":%u,"
+                     "\"rssi\":%d,\"rgb\":\"",
+                     G.prog, led.getState() ? 1 : 0,
+                     static_cast<int>(WiFi.RSSI()));
+    static const char HEX_DIGITS[] = "0123456789abcdef";
+    for (uint8_t row = 0; row < wc24h::GAME_ROWS; row++) {
+        for (uint8_t col = 0; col < wc24h::GAME_COLS; col++) {
+            const RgbColor px = led.getPixel(
+                usedClockType->getFrontMatrixIndex(row, col) * perLetter);
+            const uint8_t values[3] = {px.R, px.G, px.B};
+            for (uint8_t v : values) {
+                buffer[n++] = HEX_DIGITS[v >> 4];
+                buffer[n++] = HEX_DIGITS[v & 0x0F];
+            }
+        }
+    }
+    buffer[n++] = '"';
+    buffer[n++] = '}';
+    buffer[n] = '\0';
+    webSocket.sendTXT(client, buffer, n);
+}
+
+//------------------------------------------------------------------------------
+// Learning colors: the hour words in a second color, so children see which
+// part of the sentence is the hour. Re-applied every second on top of the
+// word clock.
+
+void applyLearningColors() {
+    if (!(G.wordColorFlags & WORD_COLORS_LEARN) || !led.getState() ||
+        !usedClockType->hasWc24hTables() ||
+        G.wc24hDisplayMode >= wc24h::CLOCK_MODES_COUNT) {
+        return;
+    }
+    wc24h::WordSet words;
+    wc24h::WordSet hourWords;
+    wc24h::fillWords(G.wc24hDisplayMode, _hour, _minute, words, hourWords);
+    HsbColor color = led.getColorbyPositionWithAppliedBrightness(Foreground);
+    color.H += 1.f / 3.f;
+    if (color.H >= 1.f) {
+        color.H -= 1.f;
+    }
+    if (color.S < 0.6f) {
+        color.S = 1.f; // white text: use a clear orange for the hours
+        color.H = 0.08f;
+    }
+    for (uint8_t idx = 1; idx < wc24h::WP_COUNT; idx++) {
+        if (!hourWords[idx]) {
+            continue;
+        }
+        const wc24h::WORD_ILLUMINATION &w = wc24h::illumination[idx];
+        for (uint8_t i = 0; i < (w.len & wc24h::ILLUMINATION_LEN_MASK); i++) {
+            led.setPixel(w.row, w.col + i, color);
+        }
+    }
+    led.show();
 }
 
 void loopTimer() {
@@ -2269,6 +2726,10 @@ void ClockWork::loop(struct tm &tm) {
             showDigitalTime();
         }
 
+        if (G.prog == COMMAND_IDLE && !overlayActive) {
+            applyLearningColors();
+        }
+
         lastSecond = _second;
     }
 
@@ -2278,6 +2739,7 @@ void ClockWork::loop(struct tm &tm) {
     if (lastMinute != _minute) {
         lastMinute = _minute;
         loopNightTimers(tm);
+        checkAlarms(tm);
         startOverlay(tm);
         if (colorChangedByWebsite) {
             eeprom::write();
@@ -2308,6 +2770,18 @@ void ClockWork::loop(struct tm &tm) {
         break;
     }
 
+    case COMMAND_REQUEST_FRAME: {
+        sendFrame(G.client_nr);
+        break;
+    }
+
+    case COMMAND_REQUEST_HIGHSCORES: {
+        if (wc24h::gameHasHighscore(highscoreRequestGame)) {
+            sendHighscores(highscoreRequestGame, G.client_nr);
+        }
+        break;
+    }
+
     case COMMAND_REQUEST_MQTT_VALUES: {
         DynamicJsonDocument config(512);
         config["command"] = "mqtt";
@@ -2329,7 +2803,7 @@ void ClockWork::loop(struct tm &tm) {
     }
 
     case COMMAND_REQUEST_CONFIG_VALUES: {
-        DynamicJsonDocument config(1408);
+        DynamicJsonDocument config(1792);
         config["command"] = "config";
         config["ssid"] = network.getSSID();
         config["timeserver"] = G.timeserver;
@@ -2378,6 +2852,15 @@ void ClockWork::loop(struct tm &tm) {
         config["bootShowIP"] = G.bootShowIP;
         config["bootSpeed"] = G.bootSpeed;
         config["digitalClockFlags"] = G.digitalClockFlags;
+        config["wordColorFlags"] = G.wordColorFlags;
+        JsonArray alarms = config.createNestedArray("alarms");
+        for (const AlarmSetting &alarm : G.alarms) {
+            JsonArray entry = alarms.createNestedArray();
+            entry.add(alarm.flags);
+            entry.add(alarm.hour);
+            entry.add(alarm.minute);
+            entry.add(alarm.effect);
+        }
         config["ledPin"] = G.hardwarePins.led;
         config["powerButtonPin"] = G.hardwarePins.powerButton;
         config["modeButtonPin"] = G.hardwarePins.modeButton;
@@ -2558,7 +3041,9 @@ void ClockWork::loop(struct tm &tm) {
     case COMMAND_SET_NIGHT_TIMERS:
     case COMMAND_SET_OVERLAYS:
     case COMMAND_SET_COLOR_ANIMATION:
-    case COMMAND_SET_DIGITAL_CLOCK: {
+    case COMMAND_SET_DIGITAL_CLOCK:
+    case COMMAND_SET_ALARMS:
+    case COMMAND_SET_WORD_COLORS: {
         eeprom::write();
         parametersChanged = true;
         break;
@@ -2812,9 +3297,34 @@ void ClockWork::loop(struct tm &tm) {
     case COMMAND_MODE_GAME: {
         if (G.progInit) {
             clearClockByProgInit();
-            gameNeedsDraw = true;
+            gameLastDraw = 0;
         }
         loopGame();
+        break;
+    }
+
+    case COMMAND_MODE_MESSAGE: {
+        if (G.progInit) {
+            clearClockByProgInit();
+            startMessage();
+        }
+        loopMessage();
+        break;
+    }
+
+    case COMMAND_MODE_AMBIENT: {
+        if (G.progInit) {
+            G.progInit = false;
+        }
+        loopAmbient();
+        break;
+    }
+
+    case COMMAND_MODE_ALARM: {
+        if (G.progInit) {
+            G.progInit = false;
+        }
+        loopAlarm();
         break;
     }
 

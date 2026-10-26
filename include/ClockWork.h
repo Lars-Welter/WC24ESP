@@ -100,6 +100,7 @@ private:
     void showOverlayWords(const bool *words);
 
 public:
+    void showNotification(int16_t icon, const char *text);
     // ClockWork() = default;
     ~ClockWork() = default;
 

@@ -34,8 +34,14 @@ inline const char *modeName(uint8_t mode) {
     return mode < DISPLAY_MODES_COUNT ? tbl_modes[mode].description : "";
 }
 
-inline void fillWords(uint8_t mode, uint8_t hh, uint8_t mm, WordSet &words) {
+// hourWords (optional) gets the words that come from the hour table, e.g.
+// for coloring hours differently from minutes.
+inline void fillWords(uint8_t mode, uint8_t hh, uint8_t mm, WordSet &words,
+                      bool *hourWords = nullptr) {
     memset(words, 0, sizeof(WordSet));
+    if (hourWords) {
+        memset(hourWords, 0, sizeof(WordSet));
+    }
 
     if (mode >= CLOCK_MODES_COUNT || hh >= HOUR_COUNT || mm >= MINUTE_COUNT) {
         return;
@@ -76,10 +82,17 @@ inline void fillWords(uint8_t mode, uint8_t hh, uint8_t mm, WordSet &words) {
             }
             const bool takeFirst =
                 wordIdx[idx] == WP_IF_MINUTE_IS_0 ? mm == 0 : isMidnight;
-            words[wordIdx[takeFirst ? idx + 1 : idx + 2]] = true;
+            const uint8_t word = wordIdx[takeFirst ? idx + 1 : idx + 2];
+            words[word] = true;
+            if (hourWords) {
+                hourWords[word] = true;
+            }
             idx += 2;
         } else {
             words[wordIdx[idx]] = true;
+            if (hourWords) {
+                hourWords[wordIdx[idx]] = true;
+            }
         }
     }
 }

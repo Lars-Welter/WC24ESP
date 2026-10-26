@@ -9,6 +9,8 @@ i18next.init({
 		cookieMinutes: 172800 // 120 days
 	},
 	fallbackLng: ["en"],
+	// Texts are written with textContent or are our own strings; no HTML escaping
+	interpolation: { escapeValue: false },
 	resources: {
 		en: {
 			translation: TRANSLATION_EN_US
@@ -54,6 +56,10 @@ function applyLanguageToAnnotatedElements() {
 	document.querySelectorAll("[data-i18next]")
 		.forEach((element) => {
 			element.innerHTML = i18next.t(element.dataset.i18next);
+		});
+	document.querySelectorAll("[data-i18next-placeholder]")
+		.forEach((element) => {
+			element.placeholder = i18next.t(element.dataset.i18nextPlaceholder);
 		});
 }
 

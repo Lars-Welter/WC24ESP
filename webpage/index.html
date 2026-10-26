@@ -121,16 +121,18 @@
     <nav class="menu" id="menu" role="menu">
         <div class="pure-menu">
             <header>
-                <a class="pure-menu-heading title" data-navigation="main" href="#" data-i18next="title"></a>
+                <a class="pure-menu-heading title" data-navigation="home" href="#" data-i18next="title"></a>
             </header>
 
             <ul class="pure-menu-list">
+                <li class="pure-menu-item" role="none"><a href="#" class="pure-menu-link" role="menuitem" data-navigation="home" data-i18next="home.h1"></a></li>
                 <li class="pure-menu-item" role="none"><a href="#" class="pure-menu-link" role="menuitem" data-navigation="main" data-i18next="colors.h1"></a></li>
                 <li class="pure-menu-item" role="none"><a href="#" class="pure-menu-link" role="menuitem" data-navigation="functions" data-i18next="functions.h1"></a></li>
                 <li class="pure-menu-item" role="none"><a href="#" class="pure-menu-link" role="menuitem" data-navigation="games" data-i18next="games.h1"></a></li>
+                <li class="pure-menu-item" role="none"><a href="#" class="pure-menu-link" role="menuitem" data-navigation="extras" data-i18next="extras.h1"></a></li>
                 <li class="pure-menu-item" role="none"><a href="#" class="pure-menu-link" role="menuitem" data-navigation="frontoptions" data-i18next="view.h1"></a></li>
                 <li class="pure-menu-item" role="none"><a href="#" class="pure-menu-link" role="menuitem" data-navigation="settings" data-i18next="settings.h1"></a></li>
-                <li class="pure-menu-item" role="none"><a href="#" class="pure-menu-link" role="menuitem" data-navigation="smart-home" data-i18next="smart-home.h1"></a></li>
+                <li class="pure-menu-item expert-only" role="none"><a href="#" class="pure-menu-link" role="menuitem" data-navigation="smart-home" data-i18next="smart-home.h1"></a></li>
                 <li class="pure-menu-item" role="none"><a href="#" class="pure-menu-link" role="menuitem" data-navigation="about" data-i18next="about.h1"></a></li>
 
                 <li class="pure-menu-heading" role="none"><label for="language" data-i18next="menu.language.label"></label></li>
@@ -163,6 +165,69 @@
                     <p data-i18next="reboot-recommended.text"></p>
                 </div>
             </div>
+
+            <div class="pure-u-24-24 alarm-ringing" id="alarm-ringing" hidden>
+                <div class="box">
+                    <p data-i18next="extras.alarm.ringing"></p>
+                    <button type="button" class="pure-button pure-button-primary" id="alarm-stop" data-i18next="extras.alarm.stop"></button>
+                </div>
+            </div>
+
+            <section class="pure-u-24-24 section section-home">
+                <header class="header">
+                    <img src="./icons/mode-wordclock.svg" class="icon" alt="icon" aria-hidden="true">
+                    <h1 data-i18next="home.h1"></h1>
+                </header>
+
+                <div class="box">
+                    <div class="preview" data-preview="home" aria-hidden="true"></div>
+                    <p class="status-line" data-status-line="home"></p>
+                </div>
+
+                <div class="box">
+                    <h2 data-i18next="home.quick"></h2>
+                    <div class="tiles">
+                        <button type="button" class="tile" data-action="clock"><span class="tile-icon" aria-hidden="true">&#128336;</span><span data-i18next="home.tile-clock"></span></button>
+                        <button type="button" class="tile" data-goto="games"><span class="tile-icon" aria-hidden="true">&#127918;</span><span data-i18next="home.tile-games"></span></button>
+                        <button type="button" class="tile" data-goto="games" data-scroll="timer-box"><span class="tile-icon" aria-hidden="true">&#9201;</span><span data-i18next="home.tile-timer"></span></button>
+                        <button type="button" class="tile" data-goto="main"><span class="tile-icon" aria-hidden="true">&#127912;</span><span data-i18next="home.tile-colors"></span></button>
+                        <button type="button" class="tile" data-goto="extras"><span class="tile-icon" aria-hidden="true">&#9200;</span><span data-i18next="home.tile-alarm"></span></button>
+                        <button type="button" class="tile" data-goto="functions"><span class="tile-icon" aria-hidden="true">&#10024;</span><span data-i18next="home.tile-modes"></span></button>
+                    </div>
+                </div>
+
+                <div class="box">
+                    <h2 data-i18next="home.message"></h2>
+                    <form class="pure-form message-form" onsubmit="return false">
+                        <input type="text" id="message-text" maxlength="30" data-i18next-placeholder="home.message-placeholder">
+                        <select id="message-repeats" aria-label="repeats">
+                            <option value="1">1&times;</option>
+                            <option value="2" selected>2&times;</option>
+                            <option value="3">3&times;</option>
+                            <option value="5">5&times;</option>
+                        </select>
+                        <button type="submit" class="pure-button pure-button-primary" id="message-send" data-i18next="home.message-send"></button>
+                    </form>
+                    <div class="quick-messages">
+                        <button type="button" class="pure-button" data-message="ESSEN IST FERTIG" data-i18next="home.msg-food"></button>
+                        <button type="button" class="pure-button" data-message="BITTE AUFRAEUMEN" data-i18next="home.msg-tidy"></button>
+                        <button type="button" class="pure-button" data-message="GUTE NACHT" data-i18next="home.msg-night"></button>
+                        <button type="button" class="pure-button" data-message="HAB DICH LIEB" data-i18next="home.msg-love"></button>
+                    </div>
+                </div>
+
+                <div class="box">
+                    <h2 data-i18next="home.mood"></h2>
+                    <div class="tiles">
+                        <button type="button" class="tile" data-ambient="1"><span class="tile-icon" aria-hidden="true">&#129760;</span><span data-i18next="home.mood-lava"></span></button>
+                        <button type="button" class="tile" data-ambient="2"><span class="tile-icon" aria-hidden="true">&#128293;</span><span data-i18next="home.mood-fire"></span></button>
+                        <button type="button" class="tile" data-ambient="3"><span class="tile-icon" aria-hidden="true">&#10052;</span><span data-i18next="home.mood-snow"></span></button>
+                        <button type="button" class="tile" data-ambient="4"><span class="tile-icon" aria-hidden="true">&#127878;</span><span data-i18next="home.mood-fireworks"></span></button>
+                        <button type="button" class="tile" data-ambient="5"><span class="tile-icon" aria-hidden="true">&#10024;</span><span data-i18next="home.mood-stars"></span></button>
+                        <button type="button" class="tile" data-ambient="6"><span class="tile-icon" aria-hidden="true">&#127783;</span><span data-i18next="home.mood-rain"></span></button>
+                    </div>
+                </div>
+            </section>
 
             <section class="pure-u-24-24 section section-main">
                 <header class="header">
@@ -553,29 +618,128 @@
                 </header>
 
                 <div class="box">
-                    <h2 data-i18next="games.play"></h2>
-                    <div class="game-select">
-                        <button type="button" class="pure-button game-start" data-game="1" data-i18next="games.tetris"></button>
-                        <button type="button" class="pure-button game-start" data-game="2" data-i18next="games.snake"></button>
-                        <button type="button" class="pure-button game-quit" data-i18next="games.quit"></button>
+                    <h2 data-i18next="games.choose"></h2>
+                    <form class="pure-form game-player" onsubmit="return false">
+                        <label for="player-name" data-i18next="games.name"></label>
+                        <input type="text" id="player-name" maxlength="8">
+                        <span class="player-number">
+                            <span data-i18next="games.i-am"></span>
+                            <label><input type="radio" name="player-number" value="1" checked> <span data-i18next="games.player1"></span></label>
+                            <label><input type="radio" name="player-number" value="2"> <span data-i18next="games.player2"></span></label>
+                        </span>
+                    </form>
+                    <h3 data-i18next="games.group-action"></h3>
+                    <div class="tiles game-tiles">
+                        <button type="button" class="tile" data-game="1"><span class="tile-icon" aria-hidden="true">&#129521;</span><span data-i18next="games.tetris"></span></button>
+                        <button type="button" class="tile" data-game="2"><span class="tile-icon" aria-hidden="true">&#128013;</span><span data-i18next="games.snake"></span></button>
+                        <button type="button" class="tile" data-game="4"><span class="tile-icon" aria-hidden="true">&#128038;</span><span data-i18next="games.flappy"></span></button>
+                        <button type="button" class="tile" data-game="5"><span class="tile-icon" aria-hidden="true">&#129521;</span><span data-i18next="games.breakout"></span></button>
+                        <button type="button" class="tile" data-game="6"><span class="tile-icon" aria-hidden="true">&#128126;</span><span data-i18next="games.invaders"></span></button>
+                        <button type="button" class="tile" data-game="7"><span class="tile-icon" aria-hidden="true">&#128056;</span><span data-i18next="games.frogger"></span></button>
+                        <button type="button" class="tile" data-game="3"><span class="tile-icon" aria-hidden="true">&#127752;</span><span data-i18next="games.simon"></span></button>
                     </div>
+                    <h3 data-i18next="games.group-two"></h3>
+                    <div class="tiles game-tiles">
+                        <button type="button" class="tile" data-game="8"><span class="tile-icon" aria-hidden="true">&#127955;</span><span data-i18next="games.pong"></span></button>
+                        <button type="button" class="tile" data-game="9"><span class="tile-icon" aria-hidden="true">&#127955;</span><span data-i18next="games.pong-cpu"></span></button>
+                        <button type="button" class="tile" data-game="10"><span class="tile-icon" aria-hidden="true">&#128308;</span><span data-i18next="games.connect4"></span></button>
+                        <button type="button" class="tile" data-game="11"><span class="tile-icon" aria-hidden="true">&#128993;</span><span data-i18next="games.connect4-cpu"></span></button>
+                        <button type="button" class="tile" data-game="12"><span class="tile-icon" aria-hidden="true">&#9889;</span><span data-i18next="games.reaction"></span></button>
+                    </div>
+                    <h3 data-i18next="games.group-learn"></h3>
+                    <div class="tiles game-tiles">
+                        <button type="button" class="tile" data-game="13"><span class="tile-icon" aria-hidden="true">&#128292;</span><span data-i18next="games.hangman"></span></button>
+                        <button type="button" class="tile" data-game="14"><span class="tile-icon" aria-hidden="true">&#128344;</span><span data-i18next="games.clock-quiz"></span></button>
+                        <button type="button" class="tile" data-game="15"><span class="tile-icon" aria-hidden="true">&#128269;</span><span data-i18next="games.word-find"></span></button>
+                        <button type="button" class="tile" data-game="16"><span class="tile-icon" aria-hidden="true">&#10133;</span><span data-i18next="games.math"></span></button>
+                    </div>
+                    <h3 data-i18next="games.group-creative"></h3>
+                    <div class="tiles game-tiles">
+                        <button type="button" class="tile" data-game="20"><span class="tile-icon" aria-hidden="true">&#127912;</span><span data-i18next="games.paint"></span></button>
+                    </div>
+                </div>
+
+                <div class="box game-box" id="game-box" hidden>
+                    <h2 id="game-title"></h2>
                     <p class="game-status" aria-live="polite">
-                        <span data-i18next="games.score"></span> <strong id="game-score">0</strong>
-                        <span id="game-extra"></span>
+                        <span id="game-score-line"></span>
                         <strong id="game-state"></strong>
                     </p>
-                    <div class="gamepad">
+                    <p class="game-text" id="game-text"></p>
+                    <div class="preview preview-game" data-preview="game" data-tap="cells" hidden></div>
+
+                    <div class="gamepad" data-controls="pad">
                         <button type="button" class="pad pad-up" data-key="3" data-repeat="0" aria-label="up">&#9650;</button>
                         <button type="button" class="pad pad-left" data-key="1" data-repeat="1" aria-label="left">&#9664;</button>
-                        <button type="button" class="pad pad-action" data-key="5" data-repeat="0" data-i18next="games.drop"></button>
+                        <button type="button" class="pad pad-action" data-key="5" data-repeat="0"></button>
                         <button type="button" class="pad pad-right" data-key="2" data-repeat="1" aria-label="right">&#9654;</button>
                         <button type="button" class="pad pad-down" data-key="4" data-repeat="1" aria-label="down">&#9660;</button>
                         <button type="button" class="pad pad-pause" data-key="6" data-repeat="0" data-i18next="games.pause"></button>
                     </div>
-                    <p class="game-hint" data-i18next="games.hint"></p>
+                    <div class="simon-pad" data-controls="simon">
+                        <button type="button" class="pad simon-red" data-key="11" aria-label="red"></button>
+                        <button type="button" class="pad simon-green" data-key="12" aria-label="green"></button>
+                        <button type="button" class="pad simon-blue" data-key="13" aria-label="blue"></button>
+                        <button type="button" class="pad simon-yellow" data-key="14" aria-label="yellow"></button>
+                    </div>
+                    <div class="reaction-pad" data-controls="reaction">
+                        <button type="button" class="pad big-button" data-key="5" data-i18next="games.now"></button>
+                    </div>
+                    <div class="letter-keys" data-controls="keyboard"></div>
+                    <div class="quiz-pad" data-controls="quiz">
+                        <svg class="quiz-clock" viewBox="-50 -50 100 100" aria-hidden="true">
+                            <circle r="47" class="quiz-face"/>
+                            <g class="quiz-ticks"></g>
+                            <line id="quiz-hour-hand" x1="0" y1="0" x2="0" y2="-24" class="quiz-hand quiz-hour"/>
+                            <line id="quiz-minute-hand" x1="0" y1="0" x2="0" y2="-38" class="quiz-hand quiz-minute"/>
+                            <circle r="3" class="quiz-center"/>
+                        </svg>
+                        <div class="pure-form quiz-inputs">
+                            <label for="quiz-hour" data-i18next="games.hour"></label>
+                            <input type="range" id="quiz-hour" min="1" max="12" value="12">
+                            <label for="quiz-minute" data-i18next="games.minute"></label>
+                            <input type="range" id="quiz-minute" min="0" max="55" step="5" value="0">
+                            <output id="quiz-time">12:00</output>
+                            <button type="button" class="pure-button pure-button-primary" id="quiz-check" data-i18next="games.check"></button>
+                        </div>
+                    </div>
+                    <div class="math-pad" data-controls="math">
+                        <output class="math-display" id="math-display"></output>
+                        <div class="keypad">
+                            <button type="button" class="pad" data-digit="7">7</button>
+                            <button type="button" class="pad" data-digit="8">8</button>
+                            <button type="button" class="pad" data-digit="9">9</button>
+                            <button type="button" class="pad" data-digit="4">4</button>
+                            <button type="button" class="pad" data-digit="5">5</button>
+                            <button type="button" class="pad" data-digit="6">6</button>
+                            <button type="button" class="pad" data-digit="1">1</button>
+                            <button type="button" class="pad" data-digit="2">2</button>
+                            <button type="button" class="pad" data-digit="3">3</button>
+                            <button type="button" class="pad" data-digit="back" aria-label="delete">&#9003;</button>
+                            <button type="button" class="pad" data-digit="0">0</button>
+                            <button type="button" class="pad pad-ok" data-digit="ok">OK</button>
+                        </div>
+                    </div>
+                    <div class="paint-pad" data-controls="paint">
+                        <div class="palette" id="paint-palette"></div>
+                        <div class="paint-buttons">
+                            <button type="button" class="pure-button" id="paint-fill" data-i18next="games.fill"></button>
+                            <button type="button" class="pure-button" id="paint-clear" data-i18next="games.clear"></button>
+                        </div>
+                    </div>
+
+                    <p class="game-hint" id="game-hint"></p>
+                    <div class="game-actions">
+                        <button type="button" class="pure-button pure-button-primary" id="game-again" data-i18next="games.again"></button>
+                        <button type="button" class="pure-button game-quit" data-i18next="games.quit"></button>
+                    </div>
+                    <div class="highscores" id="highscores" hidden>
+                        <h3 data-i18next="games.highscores"></h3>
+                        <ol id="highscore-list"></ol>
+                    </div>
                 </div>
 
-                <div class="box">
+                <div class="box" id="timer-box">
                     <h2 data-i18next="timer.h2"></h2>
                     <div class="timer-display" id="timer-display">00:00</div>
                     <form class="pure-form pure-form-aligned" onsubmit="return false">
@@ -597,13 +761,56 @@
                 </div>
             </section>
 
+            <section class="pure-u-24-24 section section-extras">
+                <header class="header">
+                    <img src="./icons/bulb.svg" class="icon" alt="icon" aria-hidden="true">
+                    <h1 data-i18next="extras.h1"></h1>
+                </header>
+
+                <div class="box">
+                    <h2 data-i18next="extras.alarm.h2"></h2>
+                    <p class="hint" data-i18next="extras.alarm.help"></p>
+                    <div id="alarm-list"></div>
+                    <button type="button" class="pure-button pure-button-primary" id="alarm-save" data-i18next="extras.save"></button>
+                </div>
+
+                <div class="box">
+                    <h2 data-i18next="extras.words.h2"></h2>
+                    <form class="pure-form pure-form-aligned">
+                        <div class="pure-control-group">
+                            <label for="learn-colors" class="pure-checkbox" data-i18next="extras.words.learn"></label>
+                            <label class="switch">
+                                <input type="checkbox" id="learn-colors" class="word-color-option">
+                                <span class="slider round"></span>
+                            </label>
+                        </div>
+                        <div class="pure-control-group">
+                            <label for="new-year" class="pure-checkbox" data-i18next="extras.words.new-year"></label>
+                            <label class="switch">
+                                <input type="checkbox" id="new-year" class="word-color-option">
+                                <span class="slider round"></span>
+                            </label>
+                        </div>
+                    </form>
+                    <p class="hint" data-i18next="extras.words.help"></p>
+                </div>
+
+                <div class="box">
+                    <h2 data-i18next="extras.more.h2"></h2>
+                    <p data-i18next="extras.more.overlays"></p>
+                    <p data-i18next="extras.more.mqtt"></p>
+                    <pre class="code">{"notify_text": "WASCHMASCHINE FERTIG"}
+{"notify_icon": 0}</pre>
+                </div>
+            </section>
+
             <section class="pure-u-24-24 section section-frontoptions">
                 <header class="header">
                     <img src="./icons/eye.svg" class="icon" alt="icon" aria-hidden="true">
                     <h1 data-i18next="view.h1"></h1>
                 </header>
 
-                <div class="box">
+                <div class="expert-only box">
                     <h2 data-i18next="view.front.h2"></h2>
                     <form class="pure-form pure-form-aligned">
                         <fieldset>
@@ -755,7 +962,7 @@
                     </form>
                 </div>
 
-                <div class="box">
+                <div class="expert-only box">
                     <h2 data-i18next="view.minutes.h2"></h2>
                     <form class="pure-form pure-form-aligned">
                         <div class="pure-control-group">
@@ -881,6 +1088,28 @@
                 </header>
 
                 <div class="box">
+                    <h2 data-i18next="settings.appearance.h2"></h2>
+                    <form class="pure-form pure-form-aligned">
+                        <div class="pure-control-group">
+                            <label for="theme" data-i18next="settings.appearance.theme"></label>
+                            <select id="theme">
+                                <option value="auto" data-i18next="settings.appearance.auto"></option>
+                                <option value="light" data-i18next="settings.appearance.light"></option>
+                                <option value="dark" data-i18next="settings.appearance.dark"></option>
+                            </select>
+                        </div>
+                        <div class="pure-control-group">
+                            <label for="expert-mode" class="pure-checkbox" data-i18next="settings.appearance.expert"></label>
+                            <label class="switch">
+                                <input type="checkbox" id="expert-mode">
+                                <span class="slider round"></span>
+                            </label>
+                        </div>
+                    </form>
+                    <p class="hint" data-i18next="settings.appearance.expert-help"></p>
+                </div>
+
+                <div class="box">
                     <h2 data-i18next="settings.status.h2"></h2>
                     <form class="pure-form pure-form-aligned">
                         <div class="pure-control-group">
@@ -892,7 +1121,7 @@
                     </form>
                 </div>
 
-                <div class="box">
+                <div class="expert-only box">
                     <h2 data-i18next="settings.led-type.h2"></h2>
                     <form class="pure-form pure-form-aligned">
                         <fieldset>
@@ -914,7 +1143,7 @@
                     </form>
                 </div>
                 <!-- Specific RGBW Start-->
-                <div class="box specific-colortype-4">
+                <div class="expert-only box specific-colortype-4">
                     <h2 data-i18next="settings.whitetype.h2"></h2>
                     <form class="pure-form pure-form-aligned">
                         <div class="pure-control-group">
@@ -928,7 +1157,7 @@
                 </div>
                 <!-- Specific RGBW End-->
 
-                <div class="box">
+                <div class="expert-only box">
                     <h2 data-i18next="settings.hardware-pins.h2"></h2>
                     <form class="pure-form pure-form-aligned">
                         <fieldset>
@@ -964,7 +1193,7 @@
                     </form>
                 </div>
 
-                <div class="box">
+                <div class="expert-only box">
                     <h2 data-i18next="settings.time-server.h2"></h2>
                     <form class="pure-form pure-form-aligned">
                         <div class="pure-control-group">
@@ -1001,7 +1230,7 @@
                     </form>
                 </div>
 
-                <div class="box">
+                <div class="expert-only box">
                     <h2 data-i18next="settings.hostname.h2"></h2>
                     <form class="pure-form pure-form-aligned">
                         <div class="pure-control-group">
@@ -1129,13 +1358,21 @@
                     </div>
                 </div>
 
-                <div class="box box-debug">
+                <div class="expert-only box box-debug">
                     <h2 data-i18next="about.debug"></h2>
                     <div id="output"></div>
                 </div>
             </section>
         </div> <!--/pure-g-->
     </main> <!--/content-->
+
+    <nav class="bottom-nav" aria-label="navigation">
+        <button type="button" data-navigation="home"><span aria-hidden="true">&#127968;</span><span data-i18next="home.h1"></span></button>
+        <button type="button" data-navigation="games"><span aria-hidden="true">&#127918;</span><span data-i18next="nav.games"></span></button>
+        <button type="button" data-navigation="main"><span aria-hidden="true">&#127912;</span><span data-i18next="colors.h1"></span></button>
+        <button type="button" data-navigation="extras"><span aria-hidden="true">&#9200;</span><span data-i18next="nav.extras"></span></button>
+        <button type="button" data-navigation="settings"><span aria-hidden="true">&#9881;</span><span data-i18next="nav.settings"></span></button>
+    </nav>
 
     <footer class="footer">
         <span data-i18next="footer.version"></span>
