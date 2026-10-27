@@ -9,6 +9,7 @@
 | `include/WC24h/Arcade.h` | übrige Spiele, gemeinsame Schnittstelle `ArcadeGame`, Spielfeld `Canvas` mit 3×5-Ziffernschrift |
 | `include/WC24h/Ambient.h` | Stimmungsanimationen, Sonnenaufgang/Blinken für den Wecker |
 | `include/WC24h/Calendar.h` | „Tage bis …", Mondphase |
+| `include/WC24h/Sun.h` | Sonnenhöhe, Sonnenauf- und -untergang, Helligkeit nach Sonnenstand |
 | `include/WC24h/Text.h` | Umlaute für die Laufschrift, `[Symbol] Text` zerlegen |
 | `include/WC24h/Wc24hIcons.h` | Symbole, `findIcon()` mit deutschen Namen |
 | `include/WC24h/Overlay.h`, `NightTimer.h` | Einblendungen, Nachtschaltung |
@@ -38,6 +39,8 @@ g++ -std=gnu++11 -Wall -Wextra -Werror -Iinclude test/wc24h_test.cpp -o wc24h_te
   `p<Platz>`, je 288 Farbnummern + Helligkeit. `cells` in der Nachricht
   `picture` sind zwei Hex-Ziffern je Feld, zeilenweise; leer bei freiem
   Platz. Nach Speichern/Löschen geht die Nachricht an alle Handys.
+* **Sonnenstand**: dritter angehängter Block (`extras3Magic`) mit Tag-/
+  Nacht-Helligkeit und Standort; `ensureExtraSettings3()`.
 * **Bestenlisten**: ESP32-NVS (`Preferences`), Namensraum `wc24h-hs`,
   Schlüssel `g<Spiel-Nr>`, je fünf Einträge `{char name[9]; uint32_t score}`.
 
@@ -79,12 +82,14 @@ dreistellig mit führenden Nullen, Texte mit Leerzeichen aufgefüllt).
 | 115 | Wecker | je Wecker (4×): Flags (3: 0x80 aktiv, Bit 0–6 = So–Sa), Stunde (3), Minute (3), Effekt (3) |
 | 116 | Wortfarben | Bits (3): 0x01 Lern-Farben, 0x02 Silvester-Feuerwerk |
 | 117 | Hinweis zeigen | Symbol (3, 999 = keins) + Durchläufe (3) + Text (30) |
+| 118 | Helligkeit nach Sonnenstand | Tag % (3) + Nacht % (3) + Breite × 100 (6, mit Vorzeichen, z. B. `+05055`) + Länge × 100 (6) |
+| 102 | Helligkeitsmodus | Modus (3: 0 Stundentabelle, 1 Lichtsensor, 2 Sonnenstand) + Min (3) + Max (3) + Spitze lx (4) |
 
 ### Anfragen
 
 | Nr. | Antwort |
 | --- | --- |
-| 200 | Konfiguration, u. a. `digitalClockFlags`, `bootSpeed`, `wordColorFlags`, `alarms` (je `[flags, Stunde, Minute, Effekt]`) |
+| 200 | Konfiguration, u. a. `digitalClockFlags`, `bootSpeed`, `wordColorFlags`, `alarms` (je `[flags, Stunde, Minute, Effekt]`), `sunDay`, `sunNight`, `sunLatitude`, `sunLongitude`, `sunrise`/`sunset` (heute, lokal „HH:MM“), `ledGain` |
 | 208 | WordClock24h-Einstellungen, Symbolnamen |
 | 209 | Live-Bild (siehe unten) |
 | 210 + Spiel-Nr. (3) | Bestenliste |
@@ -138,13 +143,15 @@ Phase (`wait`/`go`) und `foul`. `rank` > 0 bei neuem Rekord.
 | 15 | Wörter finden | | ja |
 | 16 | Kopfrechnen | | ja |
 | 20 | Malbrett | | |
+| 21 | Würfel | | |
+| 22 | Sanduhr | | |
 
 ### Tasten (Befehl 113)
 
 | Taste | Bedeutung | Wert |
 | --- | --- | --- |
 | 1–4 | links, rechts, hoch, runter | |
-| 5 | Aktion (fallen lassen, flattern, feuern, JETZT) | |
+| 5 | Aktion (fallen lassen, flattern, feuern, JETZT, würfeln, Sanduhr neu starten) | |
 | 6 | Pause (nur Einzelspiele) | |
 | 11–14 | Simon: rot, grün, blau, gelb | |
 | 20 | Malbrett: Feld setzen | Feld × 64 + Farbe |
@@ -154,6 +161,9 @@ Phase (`wait`/`go`) und `foul`. `rank` > 0 bei neuem Rekord.
 | 24 | Malbrett: Bild speichern | Platz 0–7 |
 | 25 | Malbrett: Bild laden | Platz 0–7 |
 | 26 | Malbrett: Bild löschen | Platz 0–7 |
+| 27 | Malbrett: Daumenkino | ms je Bild (100–5000), 0 = Stopp |
+| 28 | Würfel: Anzahl | 1 oder 2 (würfelt gleich) |
+| 29 | Sanduhr: Zeit | Sekunden (5–3600), startet |
 | 30 | Antwort (Quiz `hh*100+mm`, Kopfrechnen Zahl) | Zahl |
 | 31 | Feld antippen (Wörter finden) | Zeile × 18 + Spalte |
 | 65–90 | Buchstabe A–Z (Galgenmännchen) | |

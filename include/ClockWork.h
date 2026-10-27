@@ -16,6 +16,7 @@ private:
     // Helper Functions
     //------------------------------------------------------------------------------
     void loopAutoBrightLogic();
+    void loopSunBrightness();
     void loopHardwareButtons();
     void handleHardwareButtonAction(HardwareButtonAction action);
     void toggleHardwareButtonPower();

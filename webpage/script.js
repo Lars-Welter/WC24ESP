@@ -120,6 +120,7 @@ const CMD = {
 	SET_ALARMS: 115,
 	SET_WORD_COLORS: 116,
 	SHOW_NOTIFICATION: 117,
+	SET_SUN_BRIGHTNESS: 118,
 	SPEED: 152,
 
 	// Requests
@@ -250,6 +251,63 @@ function debugMessage(debugMessage, someObject) {
 }
 
 /// only shows elements of class `cls` if `enbl` is true.
+/*
+ * Brightness by the sun (mode 2): the SP803E has no light sensor, so the
+ * clock dims after sunset and brightens after sunrise at its location.
+ */
+function showBrightnessMode(mode) {
+	enableSpecific("specific-layout-brightness-man", mode === 0);
+	enableSpecific("specific-layout-brightness-auto", mode === 1);
+	enableSpecific("specific-layout-brightness-sun", mode === 2);
+}
+
+function signedCoordinate(degrees) {
+	const hundredths = Math.round(Number(degrees) * 100);
+	return (hundredths < 0 ? "-" : "+") + String(Math.abs(hundredths)).padStart(5, "0");
+}
+
+function sendSunBrightness() {
+	const day = document.getElementById("sun-day").value;
+	const night = document.getElementById("sun-night").value;
+	sendCmd(CMD.SET_SUN_BRIGHTNESS, nstr(day) + nstr(night) +
+		signedCoordinate(document.getElementById("sun-latitude").value) +
+		signedCoordinate(document.getElementById("sun-longitude").value));
+	setTimeout(() => sendCmd(CMD.REQ_CONFIG_VALUES), 500);
+}
+
+function renderSunBrightness(data) {
+	if (data.sunDay === undefined) {
+		return;
+	}
+	const fields = [["sun-day", data.sunDay], ["sun-night", data.sunNight]];
+	fields.forEach(([id, value]) => {
+		document.getElementById(id).value = value;
+		document.getElementById(`${id}-value`).textContent = value;
+	});
+	const latitude = document.getElementById("sun-latitude");
+	const longitude = document.getElementById("sun-longitude");
+	if (document.activeElement !== latitude && document.activeElement !== longitude) {
+		latitude.value = (data.sunLatitude / 100).toFixed(2);
+		longitude.value = (data.sunLongitude / 100).toFixed(2);
+	}
+	document.getElementById("sun-info").textContent = i18next.t("settings.brightness.sun-info", {
+		rise: data.sunrise,
+		set: data.sunset,
+		gain: data.ledGain
+	});
+}
+
+function initSunBrightness() {
+	["sun-day", "sun-night"].forEach(id => {
+		const slider = document.getElementById(id);
+		slider.addEventListener("input", () => {
+			document.getElementById(`${id}-value`).textContent = slider.value;
+		});
+		slider.addEventListener("change", sendSunBrightness);
+	});
+	document.getElementById("sun-save").addEventListener("click", sendSunBrightness);
+}
+
 function enableSpecific(cls, enbl) {
 	let items = document.getElementsByClassName(cls);
 	for (const item of items) {
@@ -553,15 +611,14 @@ function initWebsocket() {
 
 				autoBrightEnabled = data.autoBrightEnabled;
 				const autoBrightSelect = document.getElementById("auto-bright-enabled");
+				if (autoBrightSelect) autoBrightSelect.value = autoBrightEnabled;
 				if (autoBrightEnabled === 1) {
-					if (autoBrightSelect) autoBrightSelect.value = 1;
 					autoBrightUpdater();
 				} else {
-					if (autoBrightSelect) autoBrightSelect.value = 0;
 					autoBrightStop();
 				}
-				enableSpecific("specific-layout-brightness-man", autoBrightEnabled !== 1);
-				enableSpecific("specific-layout-brightness-auto", autoBrightEnabled === 1);
+				showBrightnessMode(autoBrightEnabled);
+				renderSunBrightness(data);
 				document.getElementById("auto-bright-min").value = autoBrightMin;
 				document.getElementById("auto-bright-max").value = autoBrightMax;
 				document.getElementById("auto-bright-peak").value = autoBrightPeak;
@@ -1105,6 +1162,7 @@ document.addEventListener("DOMContentLoaded", function() {
 	setElementsForFunctionsMenu();
 	initWebsocket();
 	initAutoReconnect();
+	initSunBrightness();
 	setColors();
 
 	document.querySelectorAll("input[name='colorwheel']").forEach(input => {
@@ -1309,8 +1367,10 @@ document.addEventListener("DOMContentLoaded", function() {
 			sendCmd(CMD.REQ_AUTO_BRIGHT);
 
 			autoBrightDisplay = Number(document.getElementById("auto-bright-enabled").value);
-			enableSpecific("specific-layout-brightness-man", !autoBrightDisplay);
-			enableSpecific("specific-layout-brightness-auto", autoBrightDisplay);
+			showBrightnessMode(autoBrightDisplay);
+			if (autoBrightDisplay === 2) {
+				sendCmd(CMD.REQ_CONFIG_VALUES);
+			}
 		});
 	});
 
@@ -1692,6 +1752,9 @@ const GAME_KEY = {
 	PAINT_SAVE: 24,
 	PAINT_LOAD: 25,
 	PAINT_DELETE: 26,
+	PAINT_PLAY: 27,
+	DICE_COUNT: 28,
+	HOURGLASS: 29,
 	ANSWER: 30,
 	TAP: 31
 };
@@ -1761,7 +1824,9 @@ const GAMES = new Map([
 	[14, { key: "clock-quiz", controls: "quiz", hint: "games.hint-clock-quiz" }],
 	[15, { key: "word-find", controls: "tap", preview: true, hint: "games.hint-word-find" }],
 	[16, { key: "math", controls: "math", hint: "games.hint-math" }],
-	[20, { key: "paint", controls: "paint", preview: true, hint: "games.hint-paint" }]
+	[20, { key: "paint", controls: "paint", preview: true, hint: "games.hint-paint" }],
+	[21, { key: "dice", controls: "dice", hint: "games.hint-dice" }],
+	[22, { key: "hourglass", controls: "hourglass", hint: "games.hint-hourglass" }]
 ]);
 const HIGHSCORE_GAMES = new Set([1, 2, 3, 4, 5, 6, 7, 13, 14, 15, 16]);
 const PROG_NAMES = new Map([[0, "mode.wordclock"], [1, "mode.wordclock"], [2, "functions.mode.seconds"],
@@ -2073,7 +2138,7 @@ function renderGameStatus(data) {
 		} else {
 			parts.push(i18next.t("games.two-score", { s1: data.score1 || 0, s2: data.score2 || 0 }));
 		}
-	} else if (data.game !== 20) {
+	} else if (data.game < 20) {
 		parts.push(i18next.t("games.score-value", { score: data.score }));
 	}
 	if (data.lives !== undefined && data.game !== 13) {
@@ -2086,7 +2151,7 @@ function renderGameStatus(data) {
 			slider.value = data.level;
 			document.getElementById("paint-brightness-value").textContent = `${data.level} %`;
 		}
-	} else if (data.level) {
+	} else if (data.level && data.game < 20) {
 		parts.push(i18next.t("games.level", { level: data.level }));
 	}
 	document.getElementById("game-score-line").textContent = parts.join(" · ");
@@ -2114,6 +2179,19 @@ function renderGameStatus(data) {
 			}
 			break;
 		case 15: text = i18next.t("games.find", { word: data.text, progress: data.text2 }); break;
+		case 21:
+			text = data.text;
+			if (previous && previous.text === "..." && data.text !== "...") {
+				vibrate(60);
+			}
+			break;
+		case 22:
+			document.getElementById("hourglass-time").textContent = data.text;
+			text = i18next.t(`games.hourglass-${data.text2}`);
+			if (data.text2 === "done" && previous && previous.text2 !== "done") {
+				vibrate([300, 150, 300, 150, 300]);
+			}
+			break;
 		case 16: {
 			text = data.text;
 			const [progress, result] = data.text2.split(" ");
@@ -2288,7 +2366,22 @@ function initGamePads() {
 			palette.appendChild(swatch);
 		});
 	});
+	// Dice and hourglass for board games
+	document.getElementById("dice-roll").addEventListener("click", () => sendGameKey(GAME_KEY.ACTION));
+	document.querySelectorAll("[data-dice-count]").forEach(button => {
+		button.addEventListener("click", () => sendGameKey(GAME_KEY.DICE_COUNT, Number(button.dataset.diceCount)));
+	});
+	document.querySelectorAll("[data-hourglass]").forEach(button => {
+		button.addEventListener("click", () => sendGameKey(GAME_KEY.HOURGLASS, Number(button.dataset.hourglass)));
+	});
+	document.getElementById("hourglass-restart").addEventListener("click", () => sendGameKey(GAME_KEY.ACTION));
+
 	initPictures();
+	// Flipbook: the clock shows the saved pictures in turn
+	const flipbookSpeed = document.getElementById("flipbook-speed");
+	document.getElementById("flipbook-play").addEventListener("click", () => sendGameKey(GAME_KEY.PAINT_PLAY, Number(flipbookSpeed.value)));
+	flipbookSpeed.addEventListener("change", () => sendGameKey(GAME_KEY.PAINT_PLAY, Number(flipbookSpeed.value)));
+	document.getElementById("flipbook-stop").addEventListener("click", () => sendGameKey(GAME_KEY.PAINT_PLAY, 0));
 	const paintBrightness = document.getElementById("paint-brightness");
 	paintBrightness.addEventListener("input", () => {
 		document.getElementById("paint-brightness-value").textContent = `${paintBrightness.value} %`;
@@ -2394,6 +2487,17 @@ function initGamesAndTimer() {
 		if (total > 0) {
 			sendTimer(TIMER_ACTION.COUNTDOWN, total);
 		}
+	});
+	// One tap for the usual kitchen times; the countdown is big enough to read
+	// from the kitchen and the living room.
+	document.querySelectorAll("[data-timer-preset]").forEach(button => {
+		button.addEventListener("click", () => {
+			const total = Number(button.dataset.timerPreset);
+			document.getElementById("timer-minutes").value = Math.floor(total / 60);
+			document.getElementById("timer-seconds").value = total % 60;
+			sendTimer(TIMER_ACTION.COUNTDOWN, total);
+			vibrate(30);
+		});
 	});
 	document.getElementById("timer-stopwatch").addEventListener("click", () => sendTimer(TIMER_ACTION.STOPWATCH));
 	document.getElementById("timer-pause").addEventListener("click", () => sendTimer(TIMER_ACTION.PAUSE));

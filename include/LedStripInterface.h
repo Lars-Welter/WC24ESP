@@ -12,4 +12,6 @@ public:
     virtual RgbColor getPixel(uint16_t index) = 0;
     virtual void clearPixel(uint16_t index) = 0;
     virtual void show() = 0;
+    // Sends the unchanged buffer again, see Led::refresh()
+    virtual void refresh() = 0;
 };

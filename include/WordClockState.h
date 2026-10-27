@@ -301,11 +301,24 @@ struct GLOBAL {
     uint16_t extras2Magic;
     AlarmSetting alarms[MAX_ALARMS];
     uint8_t wordColorFlags;
+
+    // Third appended block, see ensureExtraSettings3().
+    uint16_t extras3Magic;
+    uint8_t sunDay;   // brightness in % while the sun is up
+    uint8_t sunNight; // brightness in % at night
+    int16_t sunLatitude;  // degrees * 100, north positive
+    int16_t sunLongitude; // degrees * 100, east positive
 };
 extern GLOBAL G;
 
 constexpr uint16_t EXTRAS_MAGIC = 0xD1C5;
 constexpr uint16_t EXTRAS2_MAGIC = 0xA7E2;
+constexpr uint16_t EXTRAS3_MAGIC = 0x5B17;
+
+// G.autoBrightEnabled: 0 hour table, 1 light sensor, 2 by the sun. The
+// SP803E has no light sensor, so the sun is its automatic brightness.
+constexpr uint8_t AUTO_BRIGHT_SENSOR = 1;
+constexpr uint8_t AUTO_BRIGHT_SUN = 2;
 
 // G.wordColorFlags
 constexpr uint8_t WORD_COLORS_LEARN = 0x01;    // hours in a second color
@@ -470,6 +483,7 @@ enum CommandWords : uint8_t {
     COMMAND_SET_ALARMS = 115,
     COMMAND_SET_WORD_COLORS = 116,
     COMMAND_SHOW_NOTIFICATION = 117,
+    COMMAND_SET_SUN_BRIGHTNESS = 118,
 
     COMMAND_SPEED = 152,
 

@@ -36,6 +36,10 @@ public:
     void clearPixel(uint16_t index) override { strip->SetPixelColor(index, 0); }
 
     void show() override { strip->Show(); }
+    void refresh() override {
+        strip->Dirty();
+        strip->Show();
+    }
 };
 
 template <typename T_METHOD>
@@ -73,4 +77,8 @@ public:
     void clearPixel(uint16_t index) override { strip->SetPixelColor(index, 0); }
 
     void show() override { strip->Show(); }
+    void refresh() override {
+        strip->Dirty();
+        strip->Show();
+    }
 };

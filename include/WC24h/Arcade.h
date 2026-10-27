@@ -43,6 +43,8 @@ enum ArcadeGameId : uint8_t {
     GAME_WORD_FIND = 15,
     GAME_MATH = 16,
     GAME_PAINT = 20,
+    GAME_DICE = 21,
+    GAME_HOURGLASS = 22,
 };
 
 enum ArcadeKey : uint8_t {
@@ -58,6 +60,9 @@ enum ArcadeKey : uint8_t {
     GAME_KEY_PAINT_SAVE = 24,   // value = picture slot (stored by ClockWork)
     GAME_KEY_PAINT_LOAD = 25,   // value = picture slot
     GAME_KEY_PAINT_DELETE = 26, // value = picture slot
+    GAME_KEY_PAINT_PLAY = 27,   // value = ms per picture, 0 stops the flipbook
+    GAME_KEY_DICE_COUNT = 28,   // value = 1 or 2 dice
+    GAME_KEY_HOURGLASS = 29,    // value = seconds, starts the hourglass
     GAME_KEY_ANSWER = 30, // value = number or hh * 100 + mm
     GAME_KEY_TAP = 31,    // value = cell (row * 18 + col)
     GAME_KEY_LETTER_A = 65, // 65..90 = A..Z
@@ -2141,6 +2146,235 @@ public:
     }
 
     void status(GameStatus &s) const override { s.level = brightness; }
+};
+
+//------------------------------------------------------------------------------
+// Dice for board games: big enough to read from across the table
+//------------------------------------------------------------------------------
+
+class DiceGame : public ArcadeGame {
+public:
+    static constexpr uint16_t ROLL_MS = 1200;
+    static constexpr uint16_t SHUFFLE_MS = 90;
+
+    uint8_t count = 1;
+    uint8_t faces[2] = {6, 6};
+    bool rolling = false;
+    uint32_t rollUntil = 0;
+    uint32_t lastShuffle = 0;
+    uint32_t rolls = 0;
+
+    DiceGame() { pausable = false; }
+
+    void start(uint32_t seed, uint32_t) override {
+        rng.seed(seed);
+        over = false;
+        rolling = false;
+        rolls = 0;
+        faces[0] = faces[1] = 6;
+    }
+
+    void roll(uint32_t now) {
+        rolling = true;
+        rollUntil = now + ROLL_MS;
+        lastShuffle = 0;
+        rolls++;
+    }
+
+    void input(const GameInput &in, uint32_t now) override {
+        if (in.key == GAME_KEY_ACTION) {
+            roll(now);
+        } else if (in.key == GAME_KEY_DICE_COUNT &&
+                   (in.value == 1 || in.value == 2)) {
+            count = in.value;
+            roll(now);
+        }
+    }
+
+    bool update(uint32_t now) override {
+        if (!rolling || now - lastShuffle < SHUFFLE_MS) {
+            return false;
+        }
+        lastShuffle = now;
+        for (uint8_t &face : faces) {
+            face = 1 + rng.below(6);
+        }
+        if (static_cast<int32_t>(now - rollUntil) >= 0) {
+            rolling = false; // the last shuffle is the result
+        }
+        return true;
+    }
+
+    // Pips on a 3x3 grid, bit 8 = top left ... bit 0 = bottom right.
+    static uint16_t pips(uint8_t face) {
+        static const uint16_t PIPS[7] = {0,     0x010, 0x101, 0x111,
+                                         0x145, 0x155, 0x16D};
+        return face <= 6 ? PIPS[face] : 0;
+    }
+
+    static void drawDie(Canvas &canvas, int16_t row, int16_t col,
+                        int16_t size, uint8_t face, uint8_t frame,
+                        uint8_t pip) {
+        for (int16_t i = 0; i < size; i++) {
+            canvas.set(row, col + i, frame);
+            canvas.set(row + size - 1, col + i, frame);
+            canvas.set(row + i, col, frame);
+            canvas.set(row + i, col + size - 1, frame);
+        }
+        // 12 wide: 2x2 pips at 2, 5, 8; 9 wide: single pips at 2, 4, 6
+        const int16_t pipSize = size >= 12 ? 2 : 1;
+        const int16_t step = size >= 12 ? 3 : 2;
+        const uint16_t bits = pips(face);
+        for (int16_t r = 0; r < 3; r++) {
+            for (int16_t c = 0; c < 3; c++) {
+                if (bits & (1 << (8 - (r * 3 + c)))) {
+                    canvas.fill(row + 2 + r * step, col + 2 + c * step,
+                                pipSize, pipSize, pip);
+                }
+            }
+        }
+    }
+
+    void render(Canvas &canvas, uint32_t) const override {
+        canvas.clear();
+        const uint8_t pip = rolling ? PAL_DIM : PAL_WHITE;
+        if (count == 1) {
+            drawDie(canvas, 2, 3, 12, faces[0], PAL_BLUE, pip);
+        } else {
+            drawDie(canvas, 3, 0, 9, faces[0], PAL_BLUE, pip);
+            drawDie(canvas, 3, 9, 9, faces[1], PAL_ORANGE, pip);
+        }
+    }
+
+    void status(GameStatus &s) const override {
+        s.score = rolling ? 0 : faces[0] + (count == 2 ? faces[1] : 0);
+        s.level = count;
+        if (rolling) {
+            strcpy(s.text, "...");
+        } else if (!rolls) {
+            strcpy(s.text, "");
+        } else if (count == 2) {
+            snprintf(s.text, sizeof(s.text), "%u + %u = %u", faces[0],
+                     faces[1], faces[0] + faces[1]);
+        } else {
+            snprintf(s.text, sizeof(s.text), "%u", faces[0]);
+        }
+    }
+};
+
+//------------------------------------------------------------------------------
+// Hourglass for Activity, Tabu & co.: the sand runs from the upper into the
+// lower bulb, at the end the glass blinks red
+//------------------------------------------------------------------------------
+
+class HourglassGame : public ArcadeGame {
+public:
+    static constexpr uint8_t SAND = 42; // inner cells of rows 1..6
+
+    // Half width of the glass per row, centered between columns 8 and 9.
+    static uint8_t half(uint8_t row) {
+        static const uint8_t HALF[GAME_ROWS] = {7, 7, 6, 5, 4, 3, 2, 1,
+                                                1, 2, 3, 4, 5, 6, 7, 7};
+        return row < GAME_ROWS ? HALF[row] : 0;
+    }
+
+    uint16_t seconds = 60;
+    bool running = false;
+    bool done = false;
+    uint32_t startedAt = 0;
+    uint32_t now_ = 0;
+
+    HourglassGame() { pausable = false; }
+
+    void start(uint32_t, uint32_t) override {
+        over = false;
+        running = false;
+        done = false;
+    }
+
+    void input(const GameInput &in, uint32_t now) override {
+        if (in.key == GAME_KEY_HOURGLASS && in.value >= 5 &&
+            in.value <= 3600) {
+            seconds = in.value;
+        } else if (in.key != GAME_KEY_ACTION) {
+            return;
+        }
+        running = true;
+        done = false;
+        startedAt = now;
+    }
+
+    uint32_t elapsedMs(uint32_t now) const {
+        if (!running && !done) {
+            return 0;
+        }
+        const uint32_t elapsed = now - startedAt;
+        return elapsed > seconds * 1000u ? seconds * 1000u : elapsed;
+    }
+
+    bool update(uint32_t now) override {
+        now_ = now;
+        if (running && now - startedAt >= seconds * 1000u) {
+            running = false;
+            done = true;
+        }
+        return running || done; // grains fall, the end blinks
+    }
+
+    // Fills `count` cells of a row from the middle outwards.
+    static void fillRow(Canvas &canvas, uint8_t row, uint8_t count,
+                        uint8_t color) {
+        for (uint8_t i = 0; i < count; i++) {
+            const int16_t offset = i / 2;
+            canvas.set(row, i % 2 ? 9 + offset : 8 - offset, color);
+        }
+    }
+
+    void render(Canvas &canvas, uint32_t now) const override {
+        canvas.clear();
+        const bool blinkOff = done && (now / 400) % 2;
+        const uint8_t glass = done ? (blinkOff ? PAL_OFF : PAL_RED) : PAL_DIM;
+        for (uint8_t row = 0; row < GAME_ROWS; row++) {
+            const uint8_t width = half(row);
+            if (row == 0 || row == GAME_ROWS - 1) {
+                canvas.fill(row, 9 - width, 1, 2 * width, glass);
+            } else {
+                canvas.set(row, 9 - width, glass);
+                canvas.set(row, 8 + width, glass);
+            }
+        }
+        const uint32_t total = seconds * 1000u;
+        const uint8_t fallen = static_cast<uint8_t>(
+            (static_cast<uint64_t>(elapsedMs(now)) * SAND) / total);
+        // Upper bulb: the sand sits on the neck, its surface sinks.
+        uint8_t left = SAND - fallen;
+        for (uint8_t row = 6; row >= 1 && left; row--) {
+            const uint8_t inner = 2 * (half(row) - 1);
+            const uint8_t n = left < inner ? left : inner;
+            fillRow(canvas, row, n, PAL_YELLOW);
+            left -= n;
+        }
+        // Lower bulb fills from the bottom.
+        uint8_t heap = fallen;
+        for (uint8_t row = 14; row >= 9 && heap; row--) {
+            const uint8_t inner = 2 * (half(row) - 1);
+            const uint8_t n = heap < inner ? heap : inner;
+            fillRow(canvas, row, n, PAL_YELLOW);
+            heap -= n;
+        }
+        if (running && (now / 150) % 2) {
+            canvas.set(7, 8, PAL_YELLOW); // a falling grain in the neck
+        } else if (running) {
+            canvas.set(8, 9, PAL_YELLOW);
+        }
+    }
+
+    void status(GameStatus &s) const override {
+        const uint32_t left = seconds - elapsedMs(now_) / 1000;
+        s.level = seconds;
+        snprintf(s.text, sizeof(s.text), "%u:%02u", left / 60, left % 60);
+        strcpy(s.text2, done ? "done" : running ? "run" : "ready");
+    }
 };
 
 //------------------------------------------------------------------------------

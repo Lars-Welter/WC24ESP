@@ -8,11 +8,13 @@
 #include "WC24h/Games.h"
 #include "WC24h/NightTimer.h"
 #include "WC24h/Overlay.h"
+#include "WC24h/Sun.h"
 #include "WC24h/Text.h"
 #include "WC24h/Wc24hIcons.h"
 #include "WC24h/Wc24hDisplay.h"
 
 #include <cstdio>
+#include <utility>
 #include <cstring>
 #include <string>
 
@@ -337,12 +339,14 @@ void testArcadeSmoke() {
     wc24h::WordFindGame words;
     wc24h::MathGame math;
     wc24h::PaintGame paint;
+    wc24h::DiceGame dice;
+    wc24h::HourglassGame hourglass;
     wc24h::ArcadeGame *games[] = {&tetris, &snake, &simon, &flappy,
                                   &breakout, &invaders, &frogger, &pong,
                                   &connect4, &reaction, &hangman, &quiz,
-                                  &words, &math, &paint};
+                                  &words, &math, &paint, &dice, &hourglass};
     static const uint8_t KEYS[] = {1, 2, 3, 4, 5, 11, 12, 13, 14, 20,
-                                   21, 22, 30, 31, 65, 69, 78, 90};
+                                   21, 22, 28, 29, 30, 31, 65, 69, 78, 90};
     wc24h::GameRng rng;
     rng.seed(99);
     for (wc24h::ArcadeGame *game : games) {
@@ -370,6 +374,62 @@ void testArcadeSmoke() {
             }
         }
     }
+}
+
+void testDiceAndHourglass() {
+    wc24h::DiceGame dice;
+    dice.start(7, 0);
+    dice.input({wc24h::GAME_KEY_DICE_COUNT, 1, 2}, 0);
+    uint32_t now = 0;
+    for (; now < 2000; now += 10) {
+        dice.update(now);
+    }
+    wc24h::GameStatus status;
+    dice.status(status);
+    expectGame(!dice.rolling && dice.count == 2, "dice stop rolling");
+    expectGame(status.score == dice.faces[0] + dice.faces[1] &&
+                   status.score >= 2 && status.score <= 12,
+               "dice sum");
+    wc24h::Canvas canvas;
+    dice.count = 1;
+    for (uint8_t face = 1; face <= 6; face++) {
+        dice.faces[0] = face;
+        dice.render(canvas, now);
+        int pipCells = 0;
+        for (auto &row : canvas.cell) {
+            for (uint8_t v : row) {
+                pipCells += v == wc24h::PAL_WHITE;
+            }
+        }
+        expectGame(pipCells == face * 4, "one die shows its pips");
+    }
+
+    wc24h::HourglassGame glass;
+    glass.start(0, 0);
+    glass.input({wc24h::GAME_KEY_HOURGLASS, 1, 60}, 1000);
+    auto sand = [&](uint32_t at) {
+        glass.update(at);
+        glass.render(canvas, at);
+        int top = 0, bottom = 0;
+        for (int r = 1; r <= 6; r++) {
+            for (uint8_t v : canvas.cell[r]) {
+                top += v == wc24h::PAL_YELLOW;
+            }
+        }
+        for (int r = 9; r <= 14; r++) {
+            for (uint8_t v : canvas.cell[r]) {
+                bottom += v == wc24h::PAL_YELLOW;
+            }
+        }
+        return std::make_pair(top, bottom);
+    };
+    expectGame(sand(1000) == std::make_pair(42, 0), "hourglass full on top");
+    expectGame(sand(31000) == std::make_pair(21, 21), "hourglass half way");
+    expectGame(sand(61000) == std::make_pair(0, 42), "hourglass run out");
+    glass.status(status);
+    expectGame(glass.done && strcmp(status.text, "0:00") == 0 &&
+                   strcmp(status.text2, "done") == 0,
+               "hourglass done");
 }
 
 void testArcadeRules() {
@@ -506,6 +566,57 @@ void testIcons() {
     }
 }
 
+// Reference times from timeanddate.com, Berlin 52.52 N 13.405 E.
+void expectSunTimes(int64_t day, int64_t riseUtc, int64_t setUtc) {
+    int64_t rise, set;
+    wc24h::sunTimes(day, 52.52, 13.405, rise, set);
+    if (llabs(rise - (day + riseUtc)) > 180 || llabs(set - (day + setUtc)) > 180) {
+        printf("FAIL sun times %lld: rise %+lld s, set %+lld s off\n",
+               static_cast<long long>(day),
+               static_cast<long long>(rise - day - riseUtc),
+               static_cast<long long>(set - day - setUtc));
+        failures++;
+    }
+}
+
+void testSun() {
+    const int64_t june21 = 1718928000;    // 2024-06-21 00:00 UTC
+    const int64_t december21 = 1734739200; // 2024-12-21 00:00 UTC
+    expectSunTimes(june21, (2 * 60 + 43) * 60, (19 * 60 + 33) * 60);
+    expectSunTimes(december21, (7 * 60 + 15) * 60, (14 * 60 + 54) * 60);
+
+    // Highest sun in Berlin at the solstice: 90 - 52.52 + 23.44 degrees.
+    double highest = -90;
+    for (int64_t t = june21; t < june21 + 86400; t += 60) {
+        highest = fmax(highest, wc24h::sunElevation(t, 52.52, 13.405));
+    }
+    if (fabs(highest - 60.92) > 0.2) {
+        printf("FAIL sun elevation at noon %.2f\n", highest);
+        failures++;
+    }
+
+    // No sunrise at the North Cape in midsummer.
+    int64_t rise, set;
+    wc24h::sunTimes(june21, 71.17, 25.78, rise, set);
+    if (rise != -1 || set != -1) {
+        printf("FAIL midnight sun has sunrise/sunset\n");
+        failures++;
+    }
+
+    const struct {
+        double elevation;
+        uint8_t expected;
+    } ramp[] = {{-30, 15}, {-6, 15}, {0, 48}, {6, 80}, {40, 80}};
+    for (const auto &step : ramp) {
+        const uint8_t got = wc24h::sunBrightness(step.elevation, 80, 15);
+        if (got != step.expected) {
+            printf("FAIL sun brightness at %.0f deg: %u, expected %u\n",
+                   step.elevation, got, step.expected);
+            failures++;
+        }
+    }
+}
+
 void testNotificationText() {
     expectGame(wc24h::findIcon("Waschmaschine") == wc24h::findIcon("washer") &&
                    wc24h::findIcon("Washer") >= 0,
@@ -531,6 +642,8 @@ void testNotificationText() {
 
 int main() {
     testNotificationText();
+    testSun();
+    testDiceAndHourglass();
     testIcons();
     testAmbientAndCalendar();
     testArcadeSmoke();

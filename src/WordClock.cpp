@@ -387,6 +387,22 @@ void ensureExtraSettings() {
     eeprom::write();
 }
 
+// Brightness by the sun, appended after ensureExtraSettings2()'s block.
+void ensureExtraSettings3() {
+    if (G.extras3Magic == EXTRAS3_MAGIC && G.sunDay <= 100 &&
+        G.sunNight <= 100 && G.sunLatitude >= -9000 &&
+        G.sunLatitude <= 9000 && G.sunLongitude >= -18000 &&
+        G.sunLongitude <= 18000) {
+        return;
+    }
+    G.extras3Magic = EXTRAS3_MAGIC;
+    G.sunDay = 70;
+    G.sunNight = 15;
+    G.sunLatitude = 5100; // middle of Germany
+    G.sunLongitude = 1000;
+    eeprom::write();
+}
+
 // Alarms and word colors, appended after ensureExtraSettings()'s block.
 void ensureExtraSettings2() {
     bool valid = G.extras2Magic == EXTRAS2_MAGIC &&
@@ -446,6 +462,7 @@ void setup() {
     ensureWc24hSettings();
     ensureExtraSettings();
     ensureExtraSettings2();
+    ensureExtraSettings3();
 
     //-------------------------------------
 
@@ -607,6 +624,8 @@ void setup() {
         ensureExtraSettings();
         G.extras2Magic = 0;
         ensureExtraSettings2();
+        G.extras3Magic = 0;
+        ensureExtraSettings3();
 
         eeprom::write();
         Serial.println("EEPROM written");

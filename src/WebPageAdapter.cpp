@@ -346,6 +346,28 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload,
 
             //------------------------------------------------------------------------------
 
+        case COMMAND_SET_SUN_BRIGHTNESS: {
+            // "118" + day % (3) + night % (3) + latitude * 100 (6, signed)
+            //       + longitude * 100 (6, signed)
+            if (length >= 21) {
+                const uint32_t day = split(payload, 3);
+                const uint32_t night = split(payload, 6);
+                char number[7] = {0};
+                memcpy(number, payload + 9, 6);
+                const long latitude = strtol(number, nullptr, 10);
+                memcpy(number, payload + 15, 6);
+                const long longitude = strtol(number, nullptr, 10);
+                if (day <= 100 && night <= 100 && labs(latitude) <= 9000 &&
+                    labs(longitude) <= 18000) {
+                    G.sunDay = day;
+                    G.sunNight = night;
+                    G.sunLatitude = latitude;
+                    G.sunLongitude = longitude;
+                }
+            }
+            break;
+        }
+
         case COMMAND_SHOW_NOTIFICATION: {
             // "117" + icon (3 digits, 999 = none) + repeats (3 digits) +
             // text (up to 30 characters), same as the Home Assistant
@@ -442,6 +464,9 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload,
 
         case COMMAND_SET_AUTO_BRIGHT: {
             G.autoBrightEnabled = split(payload, 3);
+            if (G.autoBrightEnabled > AUTO_BRIGHT_SUN) {
+                G.autoBrightEnabled = 0;
+            }
             G.autoBrightMin = split(payload, 6);
             G.autoBrightMax = split(payload, 9);
             G.autoBrightPeak = split(payload, 12, 4);

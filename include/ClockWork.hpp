@@ -10,6 +10,7 @@
 #include "WC24h/CurrentWeather.h"
 #include "WC24h/Games.h"
 #include "WC24h/NightTimer.h"
+#include "WC24h/Sun.h"
 #include "WC24h/Overlay.h"
 #include "WC24h/Text.h"
 #include "WC24h/Wc24hDisplay.h"
@@ -54,6 +55,52 @@ Outputs:
 lux = Ambient light [LUX]
 ledGain = gain for LEDs: 0.0-100.0% (n % of the configured bri:effectBri)
 */
+
+//------------------------------------------------------------------------------
+// Brightness by the sun: night brightness after dusk, day brightness once the
+// sun is up, a smooth ramp through twilight (see WC24h/Sun.h).
+
+void ClockWork::loopSunBrightness() {
+    const time_t utc = time(nullptr);
+    if (utc < 100000000) {
+        return; // no time from NTP yet
+    }
+    const float gain = wc24h::sunBrightness(
+        wc24h::sunElevation(utc, G.sunLatitude / 100.0, G.sunLongitude / 100.0),
+        G.sunDay, G.sunNight);
+    if (gain != ledGain) {
+        ledGain = gain;
+        parametersChanged = true;
+    }
+}
+
+// Today's sunrise and sunset as "HH:MM" local time, "--:--" if there is none.
+static void sunTimesText(char *rise, char *set) {
+    strcpy(rise, "--:--");
+    strcpy(set, "--:--");
+    const time_t now = time(nullptr);
+    if (now < 100000000) {
+        return;
+    }
+    struct tm local;
+    localtime_r(&now, &local);
+    local.tm_hour = local.tm_min = local.tm_sec = 0;
+    int64_t sunrise, sunset;
+    wc24h::sunTimes(mktime(&local), G.sunLatitude / 100.0,
+                    G.sunLongitude / 100.0, sunrise, sunset);
+    if (sunrise >= 0) {
+        const time_t t = sunrise;
+        localtime_r(&t, &local);
+        strftime(rise, 6, "%H:%M", &local);
+    }
+    if (sunset >= 0) {
+        const time_t t = sunset;
+        localtime_r(&t, &local);
+        strftime(set, 6, "%H:%M", &local);
+    }
+}
+
+//------------------------------------------------------------------------------
 
 void ClockWork::loopAutoBrightLogic() {
     if (G.autoBrightEnabled != 1)
@@ -2025,6 +2072,8 @@ wc24h::ClockQuizGame clockQuizGame;
 wc24h::WordFindGame wordFindGame;
 wc24h::MathGame mathGame;
 wc24h::PaintGame paintGame;
+wc24h::DiceGame diceGame;
+wc24h::HourglassGame hourglassGame;
 
 wc24h::ArcadeGame *game = nullptr;
 uint8_t gameId = wc24h::GAME_NONE;
@@ -2283,11 +2332,71 @@ void sendPicture(uint8_t slot, int16_t client) {
     }
 }
 
+bool loadPictureIntoPaint(uint8_t slot) {
+    StoredPicture picture;
+    if (!loadPicture(slot, picture)) {
+        return false;
+    }
+    for (uint16_t i = 0; i < sizeof(picture.cells); i++) {
+        const uint8_t color = picture.cells[i];
+        paintGame.picture.cell[i / wc24h::GAME_COLS][i % wc24h::GAME_COLS] =
+            color < wc24h::PAL_EXT_COUNT ? color : 0;
+    }
+    if (picture.brightness >= 5 && picture.brightness <= 100) {
+        paintGame.brightness = picture.brightness;
+    }
+    paintGame.dirty = true;
+    return true;
+}
+
+// Flipbook: the saved pictures in turn, like a little cartoon.
+uint16_t flipbookInterval = 0; // ms per picture, 0 = off
+uint8_t flipbookSlots = 0;     // bit per filled slot
+uint8_t flipbookSlot = 0;
+uint32_t flipbookLast = 0;
+
+void startFlipbook(uint16_t interval) {
+    flipbookSlots = 0;
+    StoredPicture picture;
+    for (uint8_t slot = 0; slot < PICTURE_SLOTS; slot++) {
+        if (loadPicture(slot, picture)) {
+            flipbookSlots |= 1 << slot;
+        }
+    }
+    flipbookInterval = flipbookSlots ? interval : 0;
+    flipbookSlot = PICTURE_SLOTS - 1; // the next one is the first filled
+    flipbookLast = 0;
+}
+
+void loopFlipbook(uint32_t now) {
+    if (!flipbookInterval || now - flipbookLast < flipbookInterval) {
+        return;
+    }
+    flipbookLast = now;
+    for (uint8_t i = 0; i < PICTURE_SLOTS; i++) {
+        flipbookSlot = (flipbookSlot + 1) % PICTURE_SLOTS;
+        if (flipbookSlots & (1 << flipbookSlot)) {
+            loadPictureIntoPaint(flipbookSlot);
+            return;
+        }
+    }
+}
+
 // Save, load and delete need the NVS, which the host-testable PaintGame
 // does not know about.
 bool handlePictureKey(const GameKeyEvent &event) {
     const uint8_t slot = event.value;
+    if (event.key != wc24h::GAME_KEY_PAINT_PLAY) {
+        flipbookInterval = 0; // painting or loading stops the flipbook
+    }
     switch (event.key) {
+    case wc24h::GAME_KEY_PAINT_PLAY:
+        if (event.value) {
+            startFlipbook(constrain(event.value, 100, 5000));
+        } else {
+            flipbookInterval = 0;
+        }
+        return true;
     case wc24h::GAME_KEY_PAINT_SAVE: {
         StoredPicture picture;
         memcpy(picture.cells, paintGame.picture.cell, sizeof(picture.cells));
@@ -2296,22 +2405,9 @@ bool handlePictureKey(const GameKeyEvent &event) {
         sendPicture(slot, -1);
         return true;
     }
-    case wc24h::GAME_KEY_PAINT_LOAD: {
-        StoredPicture picture;
-        if (loadPicture(slot, picture)) {
-            for (uint16_t i = 0; i < sizeof(picture.cells); i++) {
-                const uint8_t color = picture.cells[i];
-                paintGame.picture.cell[i / wc24h::GAME_COLS]
-                                      [i % wc24h::GAME_COLS] =
-                    color < wc24h::PAL_EXT_COUNT ? color : 0;
-            }
-            if (picture.brightness >= 5 && picture.brightness <= 100) {
-                paintGame.brightness = picture.brightness;
-            }
-            paintGame.dirty = true;
-        }
+    case wc24h::GAME_KEY_PAINT_LOAD:
+        loadPictureIntoPaint(slot);
         return true;
-    }
     case wc24h::GAME_KEY_PAINT_DELETE:
         storePicture(slot, nullptr);
         sendPicture(slot, -1);
@@ -2363,6 +2459,10 @@ wc24h::ArcadeGame *gameFor(uint8_t id) {
         return &mathGame;
     case wc24h::GAME_PAINT:
         return &paintGame;
+    case wc24h::GAME_DICE:
+        return &diceGame;
+    case wc24h::GAME_HOURGLASS:
+        return &hourglassGame;
     default:
         return nullptr;
     }
@@ -2411,6 +2511,7 @@ void reportGame(bool force = false) {
 }
 
 void startGame(uint8_t id) {
+    flipbookInterval = 0;
     game = gameFor(id);
     if (!game) {
         id = wc24h::GAME_TETRIS;
@@ -2492,6 +2593,9 @@ void loopGame() {
     }
     gameKeyCount = 0;
 
+    if (game == &paintGame) {
+        loopFlipbook(now);
+    }
     if (!game->over && !gamePaused) {
         changed |= game->update(now);
     }
@@ -2845,8 +2949,10 @@ void ClockWork::loop(struct tm &tm) {
         //--------------------------------------------
         // Auto Brightness Logic
         //--------------------------------------------
-        if (G.autoBrightEnabled == 1) {
+        if (G.autoBrightEnabled == AUTO_BRIGHT_SENSOR) {
             loopAutoBrightLogic();
+        } else if (G.autoBrightEnabled == AUTO_BRIGHT_SUN && _second == 0) {
+            loopSunBrightness();
         }
 
         currentWeather.loop(isCurrentWeatherNeeded());
@@ -2865,6 +2971,8 @@ void ClockWork::loop(struct tm &tm) {
         if (G.prog == COMMAND_IDLE && !overlayActive) {
             applyLearningColors();
         }
+
+        led.refresh();
 
         lastSecond = _second;
     }
@@ -2946,7 +3054,7 @@ void ClockWork::loop(struct tm &tm) {
     }
 
     case COMMAND_REQUEST_CONFIG_VALUES: {
-        DynamicJsonDocument config(1792);
+        DynamicJsonDocument config(2048);
         config["command"] = "config";
         config["ssid"] = network.getSSID();
         config["timeserver"] = G.timeserver;
@@ -3011,6 +3119,17 @@ void ClockWork::loop(struct tm &tm) {
         config["i2cSdaPin"] = G.i2cSdaPin;
         config["i2cSclPin"] = G.i2cSclPin;
         config["autoBrightEnabled"] = G.autoBrightEnabled;
+        config["sunDay"] = G.sunDay;
+        config["sunNight"] = G.sunNight;
+        config["sunLatitude"] = G.sunLatitude;
+        config["sunLongitude"] = G.sunLongitude;
+        {
+            char rise[6], set[6];
+            sunTimesText(rise, set);
+            config["sunrise"] = rise;
+            config["sunset"] = set;
+        }
+        config["ledGain"] = static_cast<uint8_t>(ledGain);
         config["isRomanLanguage"] = usedClockType->isRomanLanguage();
         config["hasDreiviertel"] = usedClockType->hasDreiviertel();
         config["hasTwenty"] = usedClockType->hasTwenty();
@@ -3201,7 +3320,12 @@ void ClockWork::loop(struct tm &tm) {
         break;
 
     case COMMAND_SET_BRIGHTNESS:
+    case COMMAND_SET_SUN_BRIGHTNESS:
     case COMMAND_SET_AUTO_BRIGHT:
+        if (G.autoBrightEnabled == AUTO_BRIGHT_SUN) {
+            loopSunBrightness();
+        }
+        // fall through
     case COMMAND_SET_WHITETYPE:
     case COMMAND_SET_TIME_MANUAL:
     case COMMAND_SET_LAYOUT_VARIANT: {

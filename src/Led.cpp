@@ -162,7 +162,8 @@ uint8_t Led::getCurrentManualBrightnessSetting() {
 HsbColor Led::getColorbyPositionWithAppliedBrightness(ColorPosition position) {
     HsbColor color = G.color[position];
 
-    if (G.autoBrightEnabled == 1) {
+    if (G.autoBrightEnabled == AUTO_BRIGHT_SENSOR ||
+        G.autoBrightEnabled == AUTO_BRIGHT_SUN) {
         color.B = setBrightnessAuto(color.B);
     } else {
         color.B *= getCurrentManualBrightnessSetting() / 100.f;
@@ -792,3 +793,5 @@ void Led::showDigitalClock(const char min1, const char min0, const char h1,
 //------------------------------------------------------------------------------
 
 void Led::show() { activeLedStrip->show(); }
+
+void Led::refresh() { activeLedStrip->refresh(); }

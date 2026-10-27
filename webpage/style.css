@@ -1621,3 +1621,55 @@ body:not(.expert) .expert-only {
         color: var(--app-text);
     }
 }
+
+.sun-info {
+    margin: 0 0 0.8em;
+    color: var(--app-text-muted);
+}
+
+.timer-presets-title {
+    margin: 0.6em 0 0.3em;
+    color: var(--app-text-muted);
+}
+
+.timer-presets {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4em;
+    margin-bottom: 0.8em;
+}
+
+.flipbook {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4em;
+    margin-top: 0.7em;
+}
+
+.dice-pad,
+.hourglass-pad {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6em;
+    align-items: center;
+}
+
+.dice-roll {
+    width: 100%;
+    max-width: 18em;
+    padding: 0.9em;
+    font-size: 1.3em;
+}
+
+.dice-count,
+.hourglass-presets {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4em;
+    justify-content: center;
+}
+
+.hourglass-time {
+    font-size: 2.4em;
+    font-variant-numeric: tabular-nums;
+}

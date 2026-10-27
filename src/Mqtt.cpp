@@ -670,7 +670,8 @@ void Mqtt::callback(char *topic, byte *payload, unsigned int length) {
     if (topicStr == baseTopic + "/auto_brightness/set") {
         bool autoBrightnessChanged = false;
         if (strcmp(msg, "ON") == 0) {
-            G.autoBrightEnabled = 1;
+            // no light sensor on the SP803E: automatic means by the sun
+            G.autoBrightEnabled = AUTO_BRIGHT_SUN;
             Serial.println("MQTT: Auto Brightness ON");
             autoBrightnessChanged = true;
         } else if (strcmp(msg, "OFF") == 0) {

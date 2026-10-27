@@ -51,7 +51,7 @@ Verpolungsschutz Ausgang +5 V ──► SP803E links VCC
 Verpolungsschutz Ausgang GND  ──► SP803E links GND
 
 SP803E rechts DATA (IO16) ─────► Trägerplatine PC6  (CN10 Pin 4)
-SP803E rechts GND ─────────────► Trägerplatine GND  (CN10 Pin 9)   (optional)
+SP803E rechts GND ─────────────► Trägerplatine GND  (CN10 Pin 9)
 SP803E rechts VCC ──[ 1 kΩ ]──► Trägerplatine PC8  (CN10 Pin 2)
 ```
 
@@ -59,8 +59,12 @@ SP803E rechts VCC ──[ 1 kΩ ]──► Trägerplatine PC8  (CN10 Pin 2)
   Verpolungsschutzes (die Seite zur Trägerplatine), nicht von den dünnen
   Steckbrücken.
 * Die rechte VCC-Klemme des SP803E führt dieselbe Spannung wie die linke.
-* Die GND-Brücke zur Trägerplatine ist optional, weil beide schon am selben
-  Netzteilausgang hängen.
+* Die GND-Brücke zur Trägerplatine gehört dazu: Das Datensignal braucht
+  seine Masse direkt daneben, über den Umweg der Stromleitung verschiebt
+  sich der Bezugspunkt, sobald Strom fließt. Pin 1 von CN10 liegt an dem
+  Ende, an dem PC8 und PC6 stecken; GND ist die innere Reihe, 5. Buchse
+  von dort. Vorher messen (0 Ω zum Minus des Netzteils), ein falscher Pin
+  zieht PC6 oder PC8 auf Masse und die Matrix bleibt dunkel.
 * Die Widerstandsbeine isolieren (Schrumpfschlauch/Isolierband): VCC liegt
   direkt neben DATA.
 
@@ -129,10 +133,40 @@ Schraubklemmen sind aber die sicherere Verbindung.
   der LED-Strom der Matrix (PC8, siehe oben). Bei einer Kette ohne
   Status-LED den Wert auf 0 setzen.
 * **3,3-V-Datenpegel:** Der ESP32 sendet mit 3,3 V, wie vorher das STM32.
-  Die Firmware treibt die LEDs über I2S mit DMA, damit WLAN-Interrupts die
-  289 LEDs lange Übertragung nicht stören (sonst blitzen einzelne Buchstaben
-  in falschen Farben auf). Treten trotzdem Fehlfarben auf: 1,8–2,2 kΩ
-  zwischen Datenleitung und +5 V (so machen es die Shields ab V3).
+  WS2812 erkennen eine „1“ sicher erst ab etwa 3,5 V. Das reicht oft, aber
+  knapp: Die Anzeige friert dann plötzlich ein, nur die ersten Buchstaben
+  („E“, „S“) leuchten in falschen Farben, Rütteln oder Berühren ändert das
+  Bild. Bei der V2.1a war das schon mit dem Nucleo so (die Shields ab V3
+  ziehen das Signal über einen Widerstand auf 5 V, was nur mit den
+  5-V-festen STM32-Pins geht). Abhilfe am ESP32: ein Pegelwandler
+  **74AHCT125** (siehe unten). Die Firmware sendet das Bild außerdem jede
+  Sekunde neu, damit ein gestörtes Bild nicht stehen bleibt, und treibt die
+  LEDs über I2S mit DMA, damit WLAN-Interrupts die Übertragung nicht
+  stören.
+
+### Pegelwandler 74AHCT125
+
+Der SN74AHCT125N (DIP-14) hebt das 3,3-V-Signal auf 5 V. Er passt auf ein
+Mini-Steckbrett, Dupont-Kabel genügen.
+
+```
+             ┌───u───┐
+ GND ── 1 OE │1    14│ VCC ── +5 V
+ DATA ─ 1A   │2    13│ 4OE ── +5 V (aus)
+ PC6 ── 1Y   │3    12│ 4A  ── GND
+ +5 V ─ 2OE  │4    11│ 4Y     frei
+ GND ── 2A   │5    10│ 3OE ── +5 V (aus)
+        2Y   │6     9│ 3A  ── GND
+ GND ── GND  │7     8│ 3Y     frei
+             └───────┘
+```
+
+* `DATA` = SP803E rechts DATA (IO16), `PC6` = Trägerplatine CN10 Pin 4
+  (dort folgt R1 220 Ω zur LED-Kette).
+* +5 V und GND vom Ausgang des Verpolungsschutzes oder SP803E rechts
+  VCC/GND. GND des Chips und des SP803E müssen verbunden sein.
+* Die Kerbe des Chips zeigt zu Pin 1/14. Ein 100-nF-Kondensator zwischen
+  Pin 14 und 7 schadet nicht.
 * **Nicht mehr nutzbar:** DCF77, Lichtsensor (LDR), DS18x20, RTC-Modul,
   IR-Empfänger — der SP803E hat dafür keine freien Anschlüsse. Die Uhrzeit
   kommt per NTP aus dem Internet.
@@ -147,4 +181,6 @@ Schraubklemmen sind aber die sicherere Verbindung.
 | Matrix komplett dunkel | Daten nicht an PC6 (220-Ω-Messung) oder Kabel in einer PWM- statt der DATA-Klemme |
 | Buchstaben verschoben | `STATUS_LED_COUNT`, Serpentine und Spiegelung in *Einstellungen* prüfen |
 | Einzelne Buchstaben blitzen falsch auf | siehe 3,3-V-Datenpegel |
+| Bild friert ein, nur E/S/D leuchten bunt, Rütteln ändert das Bild | Datenpegel zu knapp: GND-Brücke prüfen, Pegelwandler 74AHCT125 einbauen |
+| Matrix nach dem Stecken der GND-Brücke ganz dunkel | GND-Kabel steckt auf PC6 oder PC8 statt auf GND |
 | Spiele laufen seitenverkehrt | ältere Firmware, aktuelle Version flashen |

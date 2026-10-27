@@ -3,6 +3,23 @@
 Alle Änderungen dieser SP803E-Variante gegenüber der
 [Multilayout-ESP-Wordclock](https://github.com/ESPWortuhr/Multilayout-ESP-Wordclock) 4.4.1.
 
+## Familie, Sonnenstand, stabilere Anzeige
+
+* **Helligkeit nach Sonnenstand** (neuer Modus, empfohlen): tagsüber und
+  nachts je eine eigene Helligkeit, in der Dämmerung sanfter Übergang.
+  Standort als Breiten-/Längengrad, die Seite zeigt Sonnenauf- und
+  -untergang. Der Schalter *Auto Brightness* in Home Assistant schaltet
+  diesen Modus, weil der SP803E keinen Lichtsensor hat.
+* Die Uhr sendet das Bild jede Sekunde neu. Ein gestörtes Bild bleibt nicht
+  mehr bis zur nächsten Minute (oder für immer) stehen.
+* **Küchentimer-Vorlagen**: Ei weich/hart, Nudeln, Pizza, Tee, Zähneputzen.
+* **Daumenkino**: die gespeicherten Malbrett-Bilder nacheinander abspielen.
+* **Spieleabend**: großer Würfel (1 oder 2) und Sanduhr (0:30–3:00) für
+  Activity, Tabu & Co.
+* Home Assistant: Beispiele für Mülltonne, Regen, Spülmaschine.
+* Umbauanleitung: GND-Brücke ist Pflicht, Pegelwandler 74AHCT125 mit
+  Steckplan; Fehlersuche für eingefrorene Anzeige.
+
 ## Bilder speichern
 
 * **Malbrett**: acht Speicherplätze für Bilder mit Vorschau. Die Bilder

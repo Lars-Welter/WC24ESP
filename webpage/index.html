@@ -273,11 +273,37 @@
                     <form class="pure-form pure-form-aligned">
                         <div class="pure-control-group">
                         <label for="auto-bright-enabled" data-i18next="settings.brightness.mode"></label><select id="auto-bright-enabled" size="1">
+                            <option value="2" data-i18next="settings.brightness.sun"></option>
                             <option value="1" data-i18next="settings.brightness.automatic"></option>
                             <option value="0" data-i18next="settings.brightness.manual"></option>
                         </select>
                         </div>
                         <br>
+                        <div class="specific-layout-brightness-sun">
+                            <p class="sun-info" id="sun-info"></p>
+                            <div class="pure-control-group">
+                                <label class="slider-label" for="sun-day" data-i18next="settings.brightness.sun-day"></label>
+                                <span class="value" id="sun-day-value">70</span> %
+                                <input id="sun-day" type="range" min="5" max="100" value="70">
+                            </div>
+                            <div class="pure-control-group">
+                                <label class="slider-label" for="sun-night" data-i18next="settings.brightness.sun-night"></label>
+                                <span class="value" id="sun-night-value">15</span> %
+                                <input id="sun-night" type="range" min="0" max="100" value="15">
+                            </div>
+                            <legend data-i18next="settings.brightness.sun-location-help"></legend>
+                            <div class="pure-control-group">
+                                <label for="sun-latitude" data-i18next="settings.brightness.sun-latitude"></label>
+                                <input id="sun-latitude" type="number" min="-90" max="90" step="0.01" value="51.00">
+                            </div>
+                            <div class="pure-control-group">
+                                <label for="sun-longitude" data-i18next="settings.brightness.sun-longitude"></label>
+                                <input id="sun-longitude" type="number" min="-180" max="180" step="0.01" value="10.00">
+                            </div>
+                            <div class="pure-controls">
+                                <button type="button" class="pure-button pure-button-primary" id="sun-save" data-i18next="settings.brightness.sun-save"></button>
+                            </div>
+                        </div>
                         <!-- Specific Brightness-manual Start-->
                         <div class="specific-layout-brightness-man">
                         <div class="pure-control-group">
@@ -657,6 +683,11 @@
                     <div class="tiles game-tiles">
                         <button type="button" class="tile" data-game="20"><span class="tile-icon" aria-hidden="true">&#127912;</span><span data-i18next="games.paint"></span></button>
                     </div>
+                    <h3 data-i18next="games.group-table"></h3>
+                    <div class="tiles game-tiles">
+                        <button type="button" class="tile" data-game="21"><span class="tile-icon" aria-hidden="true">&#127922;</span><span data-i18next="games.dice"></span></button>
+                        <button type="button" class="tile" data-game="22"><span class="tile-icon" aria-hidden="true">&#8987;</span><span data-i18next="games.hourglass"></span></button>
+                    </div>
                 </div>
 
                 <div class="box game-box" id="game-box" hidden>
@@ -720,6 +751,24 @@
                             <button type="button" class="pad pad-ok" data-digit="ok">OK</button>
                         </div>
                     </div>
+                    <div class="dice-pad" data-controls="dice">
+                        <button type="button" class="pure-button pure-button-primary dice-roll" id="dice-roll" data-i18next="games.roll"></button>
+                        <div class="dice-count">
+                            <button type="button" class="pure-button" data-dice-count="1" data-i18next="games.one-die"></button>
+                            <button type="button" class="pure-button" data-dice-count="2" data-i18next="games.two-dice"></button>
+                        </div>
+                    </div>
+                    <div class="hourglass-pad" data-controls="hourglass">
+                        <div class="hourglass-time" id="hourglass-time">1:00</div>
+                        <div class="hourglass-presets">
+                            <button type="button" class="pure-button" data-hourglass="30">0:30</button>
+                            <button type="button" class="pure-button" data-hourglass="60">1:00</button>
+                            <button type="button" class="pure-button" data-hourglass="90">1:30</button>
+                            <button type="button" class="pure-button" data-hourglass="120">2:00</button>
+                            <button type="button" class="pure-button" data-hourglass="180">3:00</button>
+                        </div>
+                        <button type="button" class="pure-button pure-button-primary" id="hourglass-restart" data-i18next="games.hourglass-restart"></button>
+                    </div>
                     <div class="paint-pad" data-controls="paint">
                         <div class="palette" id="paint-palette"></div>
                         <div class="pure-form paint-brightness">
@@ -734,6 +783,15 @@
                         <h3 class="pictures-title" data-i18next="games.pictures"></h3>
                         <p class="pictures-hint" data-i18next="games.pictures-hint"></p>
                         <div class="pictures" id="paint-pictures"></div>
+                        <div class="flipbook">
+                            <button type="button" class="pure-button" id="flipbook-play" data-i18next="games.flipbook-play"></button>
+                            <button type="button" class="pure-button" id="flipbook-stop" data-i18next="games.flipbook-stop"></button>
+                            <select id="flipbook-speed" aria-label="speed">
+                                <option value="1500" data-i18next="games.flipbook-slow"></option>
+                                <option value="600" selected data-i18next="games.flipbook-medium"></option>
+                                <option value="250" data-i18next="games.flipbook-fast"></option>
+                            </select>
+                        </div>
                     </div>
 
                     <p class="game-hint" id="game-hint"></p>
@@ -750,6 +808,15 @@
                 <div class="box" id="timer-box">
                     <h2 data-i18next="timer.h2"></h2>
                     <div class="timer-display" id="timer-display">00:00</div>
+                    <p class="timer-presets-title" data-i18next="timer.presets"></p>
+                    <div class="timer-presets">
+                        <button type="button" class="pure-button" data-timer-preset="300"><span aria-hidden="true">&#129370;</span> <span data-i18next="timer.egg-soft"></span></button>
+                        <button type="button" class="pure-button" data-timer-preset="540"><span aria-hidden="true">&#129370;</span> <span data-i18next="timer.egg-hard"></span></button>
+                        <button type="button" class="pure-button" data-timer-preset="600"><span aria-hidden="true">&#127837;</span> <span data-i18next="timer.pasta"></span></button>
+                        <button type="button" class="pure-button" data-timer-preset="720"><span aria-hidden="true">&#127829;</span> <span data-i18next="timer.pizza"></span></button>
+                        <button type="button" class="pure-button" data-timer-preset="240"><span aria-hidden="true">&#127861;</span> <span data-i18next="timer.tea"></span></button>
+                        <button type="button" class="pure-button" data-timer-preset="120"><span aria-hidden="true">&#129701;</span> <span data-i18next="timer.teeth"></span></button>
+                    </div>
                     <form class="pure-form pure-form-aligned" onsubmit="return false">
                         <div class="pure-control-group">
                             <label for="timer-minutes" data-i18next="timer.minutes"></label>

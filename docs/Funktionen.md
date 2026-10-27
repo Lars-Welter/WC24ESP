@@ -66,6 +66,8 @@ kehrt zur Uhrzeit zurück. Treffer und Spielende vibrieren auf dem Handy.
 | Uhrzeit-Quiz | Uhrzeit in Worten lesen und an der Analoguhr einstellen, 10 Fragen | Regler Stunde/Minute, *Prüfen* |
 | Wörter finden | das gesuchte Wort in der Vorschau Buchstabe für Buchstabe antippen, 10 Wörter | Vorschau antippen |
 | Kopfrechnen | Aufgabe auf der Uhr lösen (+ − × :), 10 Aufgaben | Zifferntasten, *OK* |
+| Würfel | ein oder zwei große Würfel für Brettspiele, vom ganzen Tisch aus lesbar | *Würfeln*, *1 Würfel* / *2 Würfel* |
+| Sanduhr | für Activity, Tabu & Co.: der Sand rinnt sichtbar nach unten, am Ende blinkt das Glas rot und das Handy vibriert | 0:30 bis 3:00, *Neu starten* |
 | Malbrett | Farbe wählen und in der Vorschau malen, auch mit dem Finger ziehen; das Bild bleibt erhalten, wenn man später zurückkommt | 40 Farben (kräftig, pastell, dunkel, Weiß- und Grautöne) und Radierer, Regler *Helligkeit*, *Alles füllen*, *Löschen*; acht Speicherplätze für Bilder |
 
 **Bilder speichern (Malbrett)**: Unter *Gespeicherte Bilder* gibt es acht
@@ -74,12 +76,20 @@ Bild dort ab, ein Bild antippen holt es zurück auf die Uhr (mit seiner
 Helligkeit), ✕ löscht es. Die Bilder liegen auf der Uhr: Was die Tochter am
 Tablet malt, kann man am eigenen Handy wieder laden.
 
+**Daumenkino**: *▶ Daumenkino* zeigt die gespeicherten Bilder nacheinander
+(langsam, mittel, schnell) – mit leicht veränderten Bildern entsteht ein
+kleiner Trickfilm. *■ Stopp*, Malen oder Laden hält es an.
+
 Am PC: Pfeiltasten, Leertaste oder Enter (Aktion), P (Pause); beim
 Galgenmännchen die Buchstabentasten, bei *Farben merken* die Tasten 1–4.
 
 **Bestenliste**: Einzelspiele merken sich die fünf besten Ergebnisse mit
 Namen, auch über einen Neustart hinweg. Ein neuer Rekord wird in der App
 angezeigt und die Punkte leuchten auf der Uhr grün.
+
+**Vorlagen für die Küche**: *Ei weich 5*, *Ei hart 9*, *Nudeln 10*,
+*Pizza 12*, *Tee 4*, *Zähneputzen 2* starten den Countdown mit einem Tipp.
+Die großen Ziffern sind von Küche und Wohnzimmer aus lesbar.
 
 **Countdown & Stoppuhr**: Minuten und Sekunden eintragen, *Countdown
 starten* (bis 99:59) oder *Stoppuhr starten*; *Pause / Weiter*, *Beenden*.
@@ -131,6 +141,16 @@ zentriert statt versetzt.
 **Boot**: was beim Einschalten passiert (Aufblitzen, LED-Durchlauf,
 WLAN-Symbol, IP-Adresse) und die **Geschwindigkeit** 1 (langsam) bis
 10 (schnell); 6 entspricht dem bisherigen Tempo.
+
+## Helligkeit
+
+*Einstellungen → Helligkeit → Modus*:
+
+| Modus | Verhalten |
+| --- | --- |
+| **Nach Sonnenstand** (empfohlen) | tagsüber die Tag-Helligkeit, nachts die Nacht-Helligkeit; in der Dämmerung (Sonne 6° unter bis 6° über dem Horizont, etwa eine Stunde) wird sanft übergeblendet. Standort als Breiten-/Längengrad eintragen (z. B. aus Google Maps), die Seite zeigt Sonnenauf- und -untergang für heute. |
+| Manuell | feste Helligkeit je Tageszeit (0–6 Uhr, 6–8 Uhr …) |
+| Automatisch | Lichtsensor (LDR/BH1750); der SP803E hat keinen, deshalb nicht verwenden |
 
 ## Einstellungen
 

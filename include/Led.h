@@ -94,4 +94,8 @@ public:
     void showDigitalClock(const char min1, const char min0, const char h1,
                           const char h0, bool secondsBar = true);
     void show();
+    // Resends the current picture. The LEDs only latch what they understood
+    // last; a disturbed transfer stays visible until the next frame, which
+    // in word clock mode is up to a minute away.
+    void refresh();
 };

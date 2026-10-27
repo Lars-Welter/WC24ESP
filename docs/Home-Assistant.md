@@ -29,7 +29,7 @@ Im Folgenden steht `ESPWordclock` für das eingetragene Topic.
 | Message | `notify` | setzt die Laufschrift und schaltet dauerhaft in den Laufschrift-Modus |
 | Scrolling Text | `text` | Text der Laufschrift |
 | Effect Speed, Transition … | `number` / `select` | Geschwindigkeit, Übergangsanimation |
-| Auto Brightness | `switch` | automatische Helligkeit (auf dem SP803E ohne Sensor wirkungslos) |
+| Auto Brightness | `switch` | Helligkeit nach Sonnenstand an/aus (der SP803E hat keinen Lichtsensor) |
 | WiFi Signal, IP, Uptime … | `sensor` | Diagnose |
 
 Für Hinweise ist **Notification** die richtige Wahl: Die Uhr zeigt sie
@@ -214,6 +214,61 @@ actions:
       entity_id: notify.espwordclock_notification
     data:
       message: "[Post] POST IST DA"
+```
+
+**Spülmaschine oder Trockner fertig** – wie die Waschmaschine oben, nur mit
+dem eigenen Leistungssensor und z. B. `"[Klingel] SPUELMASCHINE FERTIG"`.
+
+**Mülltonne rausstellen** am Vorabend um 19 Uhr. Mit einer
+Abfallkalender-Integration (z. B. *Waste Collection Schedule* aus HACS), die
+einen Sensor mit den Tagen bis zur nächsten Abholung liefert:
+
+```yaml
+alias: Wordclock24 – Müll rausstellen
+triggers:
+  - trigger: time
+    at: "19:00:00"
+conditions:
+  - condition: state
+    entity_id: sensor.muell_naechste_abholung
+    attribute: daysTo
+    state: 1
+actions:
+  - action: notify.send_message
+    target:
+      entity_id: notify.espwordclock_notification
+    data:
+      message: >
+        MORGEN {{ state_attr('sensor.muell_naechste_abholung', 'types')
+        | join(' ') | upper }}
+```
+
+Attribut- und Sensornamen hängen von der Integration ab; in den
+Entwicklerwerkzeugen nachsehen.
+
+**Schirm mitnehmen** – morgens um 7 Uhr, wenn heute Regen angesagt ist
+(Wetter-Integration, z. B. *Met.no* oder *DWD*):
+
+```yaml
+alias: Wordclock24 – Regen heute
+triggers:
+  - trigger: time
+    at: "07:00:00"
+actions:
+  - action: weather.get_forecasts
+    target:
+      entity_id: weather.home
+    data:
+      type: daily
+    response_variable: forecast
+  - condition: template
+    value_template: >
+      {{ forecast['weather.home'].forecast[0].precipitation_probability | default(0) >= 60 }}
+  - action: notify.send_message
+    target:
+      entity_id: notify.espwordclock_notification
+    data:
+      message: "SCHIRM MITNEHMEN"
 ```
 
 **Nur Text**, z. B. vom Handy über ein Skript:
